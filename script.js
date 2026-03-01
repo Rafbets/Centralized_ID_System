@@ -2611,6 +2611,17 @@ const adminAllowedWhileLocked = new Set([
   "signatureY",
   "signatureScale",
   "signatureRotate",
+  "authSignatureMode",
+  "authSignatureColor",
+  "authSignatureFile",
+  "authSignatureFileDefault",
+  "authSignatureAdjustToggle",
+  "authSignatureX",
+  "authSignatureY",
+  "authSignatureScale",
+  "authSignatureRotate",
+  "clearAuthSignaturePad",
+  "useAuthPadSignature",
   "clearSignaturePad",
   "usePadSignature",
   "employeeName",
@@ -3181,10 +3192,15 @@ function applyAdminAccessState() {
     "signatureX",
     "signatureY",
     "signatureScale",
+    "signatureRotate",
     "signatory",
     "signatoryTitle",
     "address",
-    "telephone"
+    "telephone",
+    "authSignatureX",
+    "authSignatureY",
+    "authSignatureScale",
+    "authSignatureRotate"
   ]);
   appSignedInRole = adminUnlocked ? "superadmin" : "admin";
   getSetupManagedControls().forEach((el) => {
@@ -3202,7 +3218,8 @@ function applyAdminAccessState() {
     }
     el.disabled = !adminUnlocked;
   });
-  if (signatureRotate) signatureRotate.disabled = false;
+    if (signatureRotate) signatureRotate.disabled = false;
+    if (authSignatureRotate) authSignatureRotate.disabled = false;
 
   if (adminAccessStateEl) {
     adminAccessStateEl.textContent = adminUnlocked ? "Settings are unlocked" : "Settings are locked";
