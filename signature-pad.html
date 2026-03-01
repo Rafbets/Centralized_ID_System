@@ -11,6 +11,10 @@
 
     * { box-sizing: border-box; }
 
+    html, body {
+      height: 100%;
+    }
+
     body {
       margin: 0;
       min-height: 100vh;
@@ -20,6 +24,9 @@
       background: radial-gradient(circle at top, #1b2436, #0e141f);
       color: #e8eefc;
       padding: 18px;
+      overflow: hidden;
+      overscroll-behavior: none;
+      touch-action: none;
     }
 
     .pad-card {
@@ -60,6 +67,30 @@
       display: block;
       border-radius: 10px;
       background: #fff;
+    }
+
+    @media (max-width: 720px) {
+      body {
+        padding: 0;
+      }
+
+      .pad-card {
+        width: 100vw;
+        height: 100vh;
+        border-radius: 0;
+        border: none;
+        box-shadow: none;
+        padding: 16px;
+      }
+
+      .pad-wrap {
+        flex: 1;
+      }
+
+      canvas {
+        height: calc(100vh - 240px);
+        max-height: 60vh;
+      }
     }
 
     .actions {
@@ -205,7 +236,6 @@
             .update({ signature_data: dataUrl, used_at: now })
             .eq("token", token)
             .is("used_at", null)
-            .gt("expires_at", now)
             .select("token");
           if (error) throw error;
           if (!data || !data.length) {
