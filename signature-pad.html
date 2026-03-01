@@ -51,7 +51,7 @@
 
     .pad-header {
       display: grid;
-      gap: 6px;
+      gap: 8px;
     }
 
     h1 {
@@ -66,6 +66,30 @@
       margin: 0;
       font-size: 0.85rem;
       color: var(--muted);
+    }
+
+    .mode-controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 0.7rem;
+      color: var(--muted);
+    }
+
+    .mode-controls label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(120, 146, 198, 0.35);
+      background: rgba(16, 22, 34, 0.6);
+    }
+
+    .mode-controls input {
+      width: 14px;
+      height: 14px;
+      margin: 0;
     }
 
     .pad-layout {
@@ -138,6 +162,21 @@
         grid-auto-columns: 1fr;
       }
     }
+
+    body.force-portrait .pad-layout {
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr auto;
+    }
+
+    body.force-portrait .actions {
+      grid-auto-flow: column;
+      grid-auto-columns: 1fr;
+    }
+
+    body.force-landscape .pad-layout {
+      grid-template-columns: minmax(0, 1fr) 240px;
+      grid-template-rows: none;
+    }
   </style>
 </head>
 <body>
@@ -145,6 +184,16 @@
     <div class="pad-header">
       <h1>Signature Pad</h1>
       <p id="status">Loading...</p>
+      <div class="mode-controls" aria-label="Signature pad orientation">
+        <label>
+          <input id="modeLandscape" type="checkbox" />
+          Landscape
+        </label>
+        <label>
+          <input id="modePortrait" type="checkbox" />
+          Portrait
+        </label>
+      </div>
     </div>
     <div class="pad-layout">
       <div class="pad-wrap">
@@ -171,6 +220,8 @@
     const pad = document.getElementById("signaturePad");
     const clearBtn = document.getElementById("clearPad");
     const submitBtn = document.getElementById("submitPad");
+    const landscapeToggle = document.getElementById("modeLandscape");
+    const portraitToggle = document.getElementById("modePortrait");
     const token = "shared";
 
     function setStatus(text, isError = false) {
@@ -187,10 +238,31 @@
     const ctx = pad.getContext("2d");
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 5;
     ctx.strokeStyle = "#111";
     let drawing = false;
     let hasInk = false;
+
+    let forcedMode = "landscape";
+    const orientationQuery = window.matchMedia("(orientation: portrait)");
+
+    function getAutoMode() {
+      return orientationQuery.matches ? "portrait" : "landscape";
+    }
+
+    function updateModeToggles() {
+      const mode = forcedMode === "auto" ? getAutoMode() : forcedMode;
+      if (landscapeToggle) landscapeToggle.checked = mode === "landscape";
+      if (portraitToggle) portraitToggle.checked = mode === "portrait";
+    }
+
+    function applyMode(mode) {
+      forcedMode = mode;
+      document.body.classList.toggle("force-landscape", mode === "landscape");
+      document.body.classList.toggle("force-portrait", mode === "portrait");
+      applyMode("landscape");
+      requestAnimationFrame(resizeCanvas);
+    }
 
     function resizeCanvas() {
       if (!pad) return;
@@ -202,7 +274,7 @@
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 5;
       ctx.strokeStyle = "#111";
       if (prev) {
         const img = new Image();
@@ -252,6 +324,37 @@
     pad.addEventListener("pointerleave", endDraw);
     pad.addEventListener("pointercancel", endDraw);
 
+    if (landscapeToggle) {
+      landscapeToggle.addEventListener("change", () => {
+        if (landscapeToggle.checked) {
+          if (portraitToggle) portraitToggle.checked = false;
+          applyMode("landscape");
+        } else {
+          applyMode("auto");
+        }
+      });
+    }
+
+    if (portraitToggle) {
+      portraitToggle.addEventListener("change", () => {
+        if (portraitToggle.checked) {
+          if (landscapeToggle) landscapeToggle.checked = false;
+          applyMode("portrait");
+        } else {
+          applyMode("auto");
+        }
+      });
+    }
+
+    if (orientationQuery) {
+      orientationQuery.addEventListener("change", () => {
+        if (forcedMode === "auto") {
+          applyMode("landscape");
+          requestAnimationFrame(resizeCanvas);
+        }
+      });
+    }
+
     if (clearBtn) {
       clearBtn.addEventListener("click", () => {
         ctx.clearRect(0, 0, pad.width, pad.height);
@@ -292,6 +395,7 @@
       });
     }
 
+    applyMode("landscape");
     window.addEventListener("resize", () => requestAnimationFrame(resizeCanvas));
     window.addEventListener("orientationchange", () => requestAnimationFrame(resizeCanvas));
     requestAnimationFrame(resizeCanvas);
