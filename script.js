@@ -36,6 +36,7 @@ const defaultsStorageKey = "idCardCreatorSavedDefaultsV2";
 const watermarkStorageKey = "idCardCreatorWatermarkSettingsV1";
 const previewAccessStorageKey = "idCardCreatorPreviewEnabledV1";
 const previewInfoStorageKey = "idCardCreatorPreviewInfoEnabledV1";
+const profileAiStorageKey = "idCardCreatorProfileAiEnabledV1";
 const localSettingsTsKey = "idCardCreatorLocalSettingsTsV1";
 const settingsValuePrefix = "idCardCreatorSettingV1_";
 const cloudStore = window.idCardCloudStore;
@@ -96,6 +97,7 @@ const defaultFieldIds = [
   "profileX",
   "profileY",
   "profileScale",
+  "profileRotate",
   "profileFrameX",
   "profileFrameY",
   "profileFrameShape",
@@ -104,9 +106,11 @@ const defaultFieldIds = [
   "signatureX",
   "signatureY",
   "signatureScale",
+  "signatureRotate",
   "authSignatureX",
   "authSignatureY",
   "authSignatureScale",
+  "authSignatureRotate",
   "authSignatureColor"
 ];
 const defaultFieldState = {
@@ -193,6 +197,94 @@ function dataUrlToFile(dataUrl, fileName) {
   } catch {
     return null;
   }
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+    reader.onerror = () => reject(new Error("Failed to read file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+let selfieSegmentation = null;
+let selfieReadyPromise = null;
+let selfieQueue = Promise.resolve();
+
+function ensureSelfieSegmentation() {
+  if (selfieReadyPromise) return selfieReadyPromise;
+  selfieReadyPromise = new Promise((resolve, reject) => {
+    if (!window.SelfieSegmentation) {
+      reject(new Error("Selfie segmentation unavailable."));
+      return;
+    }
+    try {
+      selfieSegmentation = new window.SelfieSegmentation({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
+      });
+      selfieSegmentation.setOptions({ modelSelection: 1 });
+      resolve(selfieSegmentation);
+    } catch (err) {
+      reject(err);
+    }
+  });
+  return selfieReadyPromise;
+}
+
+function runSelfieSegmentation(image) {
+  return ensureSelfieSegmentation().then((segmenter) => {
+    selfieQueue = selfieQueue.then(
+      () =>
+        new Promise((resolve, reject) => {
+          try {
+            segmenter.onResults((results) => resolve(results));
+            segmenter.send({ image }).catch(reject);
+          } catch (err) {
+            reject(err);
+          }
+        })
+    );
+    return selfieQueue;
+  });
+}
+
+async function segmentProfileToWhite(dataUrl) {
+  const img = new Image();
+  img.src = dataUrl;
+  await img.decode();
+  const maxSize = 1024;
+  const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+  const width = Math.round(img.width * scale);
+  const height = Math.round(img.height * scale);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return dataUrl;
+  const results = await runSelfieSegmentation(img);
+  const maskCanvas = document.createElement("canvas");
+  maskCanvas.width = width;
+  maskCanvas.height = height;
+  const maskCtx = maskCanvas.getContext("2d");
+  if (!maskCtx) return dataUrl;
+  maskCtx.filter = "blur(1.2px)";
+  maskCtx.drawImage(results.segmentationMask, 0, 0, width, height);
+  maskCtx.filter = "none";
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.filter = "contrast(1.12) saturate(1.08) brightness(1.02)";
+  ctx.drawImage(img, 0, 0, width, height);
+  ctx.globalCompositeOperation = "destination-in";
+  ctx.drawImage(maskCanvas, 0, 0, width, height);
+  ctx.globalCompositeOperation = "destination-over";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.globalCompositeOperation = "source-over";
+  ctx.filter = "none";
+  return canvas.toDataURL("image/png");
 }
 
 function applySavedDefaultValues() {
@@ -1333,6 +1425,8 @@ const profileFrameShapeInput = document.getElementById("profileFrameShape");
 const profileFrameSizeInput = document.getElementById("profileFrameSize");
 const profileAdjustToggle = document.getElementById("profileAdjustToggle");
 const profileAdjustPanel = document.getElementById("profileAdjustPanel");
+const profileFrameAdjustToggle = document.getElementById("profileFrameAdjustToggle");
+const profileFrameAdjustPanel = document.getElementById("profileFrameAdjustPanel");
 const employeeSignature = document.getElementById("employeeSignature");
 const signatureFileInput = document.getElementById("signatureFile");
 const signatureColorInput = document.getElementById("signatureColor");
@@ -1923,6 +2017,13 @@ function toggleProfileAdjustPanel() {
     profileAdjustToggle.textContent = profileAdjustPanel.hidden ? "Adjust" : "Hide Adjust";
   }
 }
+function toggleProfileFrameAdjustPanel() {
+  if (!profileFrameAdjustPanel) return;
+  profileFrameAdjustPanel.hidden = !profileFrameAdjustPanel.hidden;
+  if (profileFrameAdjustToggle) {
+    profileFrameAdjustToggle.textContent = profileFrameAdjustPanel.hidden ? "Adjust" : "Hide Adjust";
+  }
+}
 
 function syncProfileAdjustPreviewMode() {
   if (!photoRing) return;
@@ -1991,18 +2092,35 @@ if (companyNameImageFileInput) {
   });
 }
 
-photoFileInput.addEventListener("change", () => {
+photoFileInput.addEventListener("change", async () => {
   const file = photoFileInput.files && photoFileInput.files[0];
   if (!file) {
     profilePhoto.src = fallbackPhoto;
     return;
   }
-  photoUrl = setImageFromFile(photoFileInput, profilePhoto, fallbackPhoto, photoUrl);
-  profileX.value = "0";
-  profileY.value = "0";
-  profileScale.value = "100";
-  renderAdjustments();
-  setStatus("Profile uploaded. Adjust position and frame as needed.");
+  try {
+    const rawDataUrl = await readFileAsDataUrl(file);
+    const useAi = !profileAiToggle || profileAiToggle.checked;
+    const processed = useAi
+      ? await segmentProfileToWhite(rawDataUrl).catch(() => rawDataUrl)
+      : rawDataUrl;
+    profilePhoto.src = processed || fallbackPhoto;
+    photoUrl = processed || rawDataUrl || photoUrl;
+    profileX.value = "0";
+    profileY.value = "0";
+    profileScale.value = "100";
+    if (profileRotate) profileRotate.value = "0";
+    renderAdjustments();
+    setStatus(useAi ? "Profile ready. Background removed and enhanced." : "Profile uploaded.");
+  } catch (err) {
+    photoUrl = setImageFromFile(photoFileInput, profilePhoto, fallbackPhoto, photoUrl);
+    profileX.value = "0";
+    profileY.value = "0";
+    profileScale.value = "100";
+    if (profileRotate) profileRotate.value = "0";
+    renderAdjustments();
+    setStatus("Profile uploaded. Adjust position and frame as needed.");
+  }
 });
 
 signatureFileInput.addEventListener("change", () => {
@@ -2020,6 +2138,7 @@ signatureFileInput.addEventListener("change", () => {
       signatureX.value = "0";
       signatureY.value = "0";
       signatureScale.value = "100";
+      if (signatureRotate) signatureRotate.value = "0";
       renderAdjustments();
       setStatus("Signature background removed.");
     })
@@ -2032,6 +2151,11 @@ signatureFileInput.addEventListener("change", () => {
       );
       employeeSignatureBaseDataUrl = employeeSignature.src || fallbackSignature;
       renderEmployeeSignatureFromBase();
+      signatureX.value = "0";
+      signatureY.value = "0";
+      signatureScale.value = "100";
+      if (signatureRotate) signatureRotate.value = "0";
+      renderAdjustments();
       setStatus(`Signature cleanup failed: ${err.message}`, true);
     });
 });
@@ -2112,15 +2236,19 @@ if (authorizedSignature) {
 const profileX = document.getElementById("profileX");
 const profileY = document.getElementById("profileY");
 const profileScale = document.getElementById("profileScale");
+const profileRotate = document.getElementById("profileRotate");
+const profileAiToggle = document.getElementById("profileAiToggle");
 const profileFrameX = document.getElementById("profileFrameX");
 const profileFrameY = document.getElementById("profileFrameY");
 const profileFrameSize = document.getElementById("profileFrameSize");
 const signatureX = document.getElementById("signatureX");
 const signatureY = document.getElementById("signatureY");
 const signatureScale = document.getElementById("signatureScale");
+const signatureRotate = document.getElementById("signatureRotate");
 const authSignatureX = document.getElementById("authSignatureX");
 const authSignatureY = document.getElementById("authSignatureY");
 const authSignatureScale = document.getElementById("authSignatureScale");
+const authSignatureRotate = document.getElementById("authSignatureRotate");
 
 function renderProfileFrameShape() {
   if (!photoRing) return;
@@ -2204,6 +2332,9 @@ function renderAdjustments() {
   profilePhoto.style.setProperty("--profile-x", `${profileX.value}px`);
   profilePhoto.style.setProperty("--profile-y", `${profileY.value}px`);
   profilePhoto.style.setProperty("--profile-scale", `${Number(profileScale.value) / 100}`);
+  if (profileRotate) {
+    profilePhoto.style.setProperty("--profile-rotate", `${profileRotate.value}deg`);
+  }
   if (photoRing && profileFrameX && profileFrameY) {
     photoRing.style.setProperty("--profile-frame-x", `${profileFrameX.value}px`);
     photoRing.style.setProperty("--profile-frame-y", `${profileFrameY.value}px`);
@@ -2216,6 +2347,9 @@ function renderAdjustments() {
   employeeSignature.style.setProperty("--signature-x", `${signatureX.value}px`);
   employeeSignature.style.setProperty("--signature-y", `${signatureY.value}px`);
   employeeSignature.style.setProperty("--signature-scale", `${Number(signatureScale.value) / 100}`);
+  if (signatureRotate) {
+    employeeSignature.style.setProperty("--signature-rotate", `${signatureRotate.value}deg`);
+  }
 
   if (authorizedSignature) {
     authorizedSignature.style.setProperty("--auth-signature-x", `${authSignatureX.value}px`);
@@ -2224,16 +2358,45 @@ function renderAdjustments() {
       "--auth-signature-scale",
       `${Number(authSignatureScale.value) / 100}`
     );
+    if (authSignatureRotate) {
+      authorizedSignature.style.setProperty("--auth-signature-rotate", `${authSignatureRotate.value}deg`);
+    }
   }
 }
 
-[qrX, qrY, logoX, logoY, logoScale, profileX, profileY, profileScale, profileFrameX, profileFrameY, profileFrameShapeInput, profileFrameSize, signatureX, signatureY, signatureScale, authSignatureX, authSignatureY, authSignatureScale].forEach((el) => {
+[qrX, qrY, logoX, logoY, logoScale, profileX, profileY, profileScale, profileRotate, profileFrameX, profileFrameY, profileFrameShapeInput, profileFrameSize, signatureX, signatureY, signatureScale, signatureRotate, authSignatureX, authSignatureY, authSignatureScale, authSignatureRotate].forEach((el) => {
   if (!el) return;
   el.addEventListener("input", renderAdjustments);
 });
 
 if (profileFrameShapeInput) {
   profileFrameShapeInput.addEventListener("change", renderAdjustments);
+}
+if (profileAiToggle) {
+  loadProfileAiSetting();
+  profileAiToggle.addEventListener("change", () => {
+    saveProfileAiSetting(profileAiToggle.checked);
+  });
+}
+
+function loadProfileAiSetting() {
+  const cloudValue = getStoreItem(profileAiStorageKey);
+  const localValue = readLocalSetting(profileAiStorageKey);
+  const safeTs = localSettingsTs && typeof localSettingsTs === "object" ? localSettingsTs : {};
+  const localTs = safeTs[profileAiStorageKey] || 0;
+  const hasCloud = cloudValue !== null && cloudValue !== undefined;
+  const hasLocal = localValue !== null && localValue !== undefined;
+  const useLocal = (hasLocal && Date.now() - localTs < 10 * 60 * 1000) || !hasCloud;
+  const enabled = parseStoredBool(useLocal ? localValue : cloudValue, true);
+  if (profileAiToggle) profileAiToggle.checked = enabled;
+}
+
+function saveProfileAiSetting(value) {
+  if (!profileAiToggle) return;
+  const next = value ?? profileAiToggle.checked;
+  setStoreItem(profileAiStorageKey, next ? "true" : "false");
+  writeLocalSetting(profileAiStorageKey, next ? "true" : "false");
+  markLocalSettingUpdated(profileAiStorageKey);
 }
 if (photoRing) {
   photoRing.addEventListener("pointerdown", startProfileDrag);
@@ -2258,6 +2421,9 @@ if (signatureAdjustToggle) {
 }
 if (profileAdjustToggle) {
   profileAdjustToggle.addEventListener("click", toggleProfileAdjustPanel);
+}
+if (profileFrameAdjustToggle) {
+  profileFrameAdjustToggle.addEventListener("click", toggleProfileFrameAdjustPanel);
 }
 if (companyAdjustToggle) {
   companyAdjustToggle.addEventListener("click", toggleCompanyAdjustPanel);
@@ -2366,17 +2532,7 @@ const approvedIdsStorageKey = "idCardCreatorApprovedIdsV1";
 const supabaseProjectUrl = "https://pboqhiwhkqfitxvbzbxt.supabase.co";
 const supabaseAnonKey =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBib3FoaXdoa3FmaXR4dmJ6Ynh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwMDI4MzgsImV4cCI6MjA4NzU3ODgzOH0.H9DjOQmSop9e6O_z0uZgBNT2-WtuE4DJc4o1gFMs1do";
-const supabaseClient =
-  window.supabase && supabaseProjectUrl && supabaseAnonKey
-    ? window.supabase.createClient(supabaseProjectUrl, supabaseAnonKey, {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: true,
-          storage: window.localStorage
-        }
-      })
-    : null;
+const supabaseClient = window.__idCardSupabaseClient || null;
 const authChannel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("idcard-auth") : null;
 async function getAuthSession() {
   if (!supabaseClient) return null;
@@ -2435,10 +2591,14 @@ const adminAllowedWhileLocked = new Set([
   "adminLockBtn",
   "entryLogoutBtn",
   "photoFile",
+  "openCameraBtn",
   "profileAdjustToggle",
+  "profileFrameAdjustToggle",
   "profileX",
   "profileY",
   "profileScale",
+  "profileRotate",
+  "profileAiToggle",
   "profileFrameX",
   "profileFrameY",
   "profileFrameShape",
@@ -2450,6 +2610,7 @@ const adminAllowedWhileLocked = new Set([
   "signatureX",
   "signatureY",
   "signatureScale",
+  "signatureRotate",
   "clearSignaturePad",
   "usePadSignature",
   "employeeName",
@@ -2481,7 +2642,7 @@ let cardZoomToken = 0;
 let cardZoomHideTimer = null;
 let entryGateCheckInProgress = false;
 let settingsFlushTimer = null;
-const localSettingsTs = {};
+var localSettingsTs = {};
 let settingsHydrating = false;
 
 const settingsPersistExcludeIds = new Set([
@@ -3041,6 +3202,7 @@ function applyAdminAccessState() {
     }
     el.disabled = !adminUnlocked;
   });
+  if (signatureRotate) signatureRotate.disabled = false;
 
   if (adminAccessStateEl) {
     adminAccessStateEl.textContent = adminUnlocked ? "Settings are unlocked" : "Settings are locked";
@@ -4269,22 +4431,43 @@ function closeCreatorTrademarkModal() {
   pendingCreatorPhotoDataUrl = "";
 }
 
-function stopCameraStream() {
-  if (cameraStream) {
-    cameraStream.getTracks().forEach((track) => track.stop());
-    cameraStream = null;
+function stopCameraStream({ hard = false } = {}) {
+  const stream = cameraStream || (cameraVideo ? cameraVideo.srcObject : null);
+  if (stream && typeof stream.getTracks === "function") {
+    stream.getTracks().forEach((track) => track.stop());
+  }
+  cameraStream = null;
+  if (cameraVideo) {
+    try {
+      if (typeof cameraVideo.pause === "function") cameraVideo.pause();
+    } catch {
+      // ignore
+    }
+    cameraVideo.srcObject = null;
+    cameraVideo.load();
+  }
+  if (hard && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices
+      .getUserMedia({ video: true, audio: false })
+      .then((tmpStream) => {
+        tmpStream.getTracks().forEach((track) => track.stop());
+      })
+      .catch(() => {});
   }
 }
 
 function closeCameraModal() {
   if (cameraModal) cameraModal.hidden = true;
-  if (cameraVideo) cameraVideo.srcObject = null;
+  if (cameraModal) cameraModal.style.display = "";
+  if (cameraModal) cameraModal.style.visibility = "";
+  if (cameraModal) cameraModal.style.opacity = "";
+  document.body.classList.remove("camera-open");
   if (cameraCanvas) cameraCanvas.hidden = true;
   if (cameraUse) cameraUse.hidden = true;
   if (cameraCapture) cameraCapture.hidden = false;
   if (cameraError) cameraError.hidden = true;
   cameraDataUrl = "";
-  stopCameraStream();
+  stopCameraStream({ hard: true });
 }
 
 async function openCameraModal() {
@@ -4292,9 +4475,16 @@ async function openCameraModal() {
   if (cameraHint) cameraHint.hidden = true;
   if (cameraError) cameraError.hidden = true;
   cameraModal.hidden = false;
+  cameraModal.removeAttribute("hidden");
+  cameraModal.style.display = "grid";
+  cameraModal.style.visibility = "visible";
+  cameraModal.style.opacity = "1";
+  document.body.classList.add("camera-open");
+  window.scrollTo({ top: 0, behavior: "auto" });
   cameraCanvas.hidden = true;
   cameraUse.hidden = true;
   cameraCapture.hidden = false;
+  if (cameraVideo) cameraVideo.style.display = "block";
   if (window.location.protocol === "file:") {
     if (cameraHint) cameraHint.hidden = false;
     if (cameraError) {
@@ -4320,6 +4510,20 @@ async function openCameraModal() {
   try {
     cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
     cameraVideo.srcObject = cameraStream;
+    cameraVideo.muted = true;
+    cameraVideo.playsInline = true;
+    cameraVideo.setAttribute("playsinline", "");
+    if (typeof cameraVideo.play === "function") {
+      await cameraVideo.play();
+    }
+    setTimeout(() => {
+      if (!cameraVideo.videoWidth || !cameraVideo.videoHeight) {
+        if (cameraError) {
+          cameraError.textContent = "Camera stream active but preview not available.";
+          cameraError.hidden = false;
+        }
+      }
+    }, 800);
   } catch (err) {
     if (cameraError) {
       cameraError.textContent = "Unable to access camera. Check browser and OS camera permissions.";
@@ -4327,6 +4531,9 @@ async function openCameraModal() {
     }
   }
 }
+
+// Expose for fallback handler if script loads after user click.
+window.openCameraModal = openCameraModal;
 
 function captureCameraPhoto() {
   if (!cameraVideo || !cameraCanvas) return;
@@ -4339,6 +4546,8 @@ function captureCameraPhoto() {
   ctx.drawImage(cameraVideo, 0, 0, width, height);
   cameraDataUrl = cameraCanvas.toDataURL("image/png");
   cameraCanvas.hidden = false;
+  if (cameraVideo) cameraVideo.style.display = "none";
+  stopCameraStream();
   if (cameraUse) cameraUse.hidden = false;
   if (cameraCapture) cameraCapture.hidden = true;
 }
@@ -4408,6 +4617,10 @@ if (cameraModal) {
     if (evt.target === cameraModal) closeCameraModal();
   });
 }
+window.addEventListener("beforeunload", () => stopCameraStream({ hard: false }));
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") stopCameraStream({ hard: false });
+});
 if (creatorTrademarkPasswordInput) {
   creatorTrademarkPasswordInput.addEventListener("keydown", (evt) => {
     if (evt.key === "Enter") saveCreatorTrademarkChanges();
@@ -4482,6 +4695,11 @@ function handleStoreChange(evt) {
     const ts = localSettingsTs[previewInfoStorageKey] || 0;
     if (Date.now() - ts < 10 * 60 * 1000) return;
     loadPreviewInfoSetting();
+  }
+  if (key === profileAiStorageKey) {
+    const ts = localSettingsTs[profileAiStorageKey] || 0;
+    if (Date.now() - ts < 10 * 60 * 1000) return;
+    loadProfileAiSetting();
   }
   if (key === defaultsStorageKey) {
     loadDefaultFieldState();

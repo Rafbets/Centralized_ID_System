@@ -29,6 +29,10 @@
       })
     : null;
 
+  if (supabaseClient) {
+    window.__idCardSupabaseClient = supabaseClient;
+  }
+
   const cache = new Map();
   const pendingUpserts = new Map();
   const pendingDeletes = new Set();

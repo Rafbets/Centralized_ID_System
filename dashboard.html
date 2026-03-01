@@ -255,7 +255,8 @@
                 <option value="square">Square</option>
               </select>
             </label>
-            <div class="profile-adjust-grid">
+            <button id="profileFrameAdjustToggle" type="button" class="profile-adjust-toggle">Adjust</button>
+            <div id="profileFrameAdjustPanel" class="profile-adjust-grid" hidden>
               <label>Frame X <input id="profileFrameX" type="range" min="-80" max="80" value="0" /></label>
               <label>Frame Y <input id="profileFrameY" type="range" min="-80" max="80" value="0" /></label>
               <label>Frame <input id="profileFrameSize" type="range" min="120" max="220" value="178" /></label>
@@ -288,6 +289,7 @@
               <label>X <input id="authSignatureX" type="range" min="-80" max="80" value="0" /></label>
               <label>Y <input id="authSignatureY" type="range" min="-40" max="40" value="0" /></label>
               <label>Scale <input id="authSignatureScale" type="range" min="65" max="180" value="100" /></label>
+              <label>Rotate <input id="authSignatureRotate" type="range" min="-45" max="45" value="0" /></label>
             </div>
             <div id="authSignaturePadWrap" class="signature-pad-wrap" hidden>
               <canvas id="authSignaturePad" class="signature-pad-canvas" width="520" height="180" aria-label="Authorized signature drawing pad"></canvas>
@@ -364,12 +366,17 @@ If found, please call our main office</textarea>
             <input id="photoFile" type="file" accept="image/*" capture="user" />
             <button id="openCameraBtn" type="button" class="upload-btn camera-btn">Use Camera</button>
           </div>
+          <label class="watermark-toggle">
+            <input id="profileAiToggle" type="checkbox" checked />
+            Auto remove background
+          </label>
           <p id="cameraHint" class="auth-error" hidden>Camera works only on https:// or http://localhost.</p>
           <button id="profileAdjustToggle" type="button" class="profile-adjust-toggle">Adjust</button>
           <div id="profileAdjustPanel" class="profile-adjust-grid" hidden>
             <label>X <input id="profileX" type="range" min="-120" max="120" value="0" /></label>
             <label>Y <input id="profileY" type="range" min="-120" max="120" value="0" /></label>
             <label>Scale <input id="profileScale" type="range" min="45" max="190" value="100" /></label>
+            <label>Rotate <input id="profileRotate" type="range" min="-45" max="45" value="0" /></label>
           </div>
         </div>
         <div class="control-box signature-tools">
@@ -389,6 +396,7 @@ If found, please call our main office</textarea>
             <label>X <input id="signatureX" type="range" min="-80" max="80" value="0" /></label>
             <label>Y <input id="signatureY" type="range" min="-40" max="40" value="0" /></label>
             <label>Scale <input id="signatureScale" type="range" min="65" max="160" value="100" /></label>
+            <label>Rotate <input id="signatureRotate" type="range" min="-45" max="45" value="0" /></label>
           </div>
           <div id="signaturePadWrap" class="signature-pad-wrap" hidden>
             <canvas id="signaturePad" class="signature-pad-canvas" width="520" height="180" aria-label="Signature drawing pad"></canvas>
@@ -651,6 +659,7 @@ If found, please call our main office</textarea>
 
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="cloud-sync.js"></script>
   <script>
