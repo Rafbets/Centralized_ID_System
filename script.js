@@ -2153,14 +2153,13 @@ async function startSignaturePhoneRequest() {
   signaturePhonePanel.hidden = false;
   setSignaturePhoneStatus("Creating secure link...");
   const token = generateToken(12);
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
   try {
     const { error } = await supabaseClient
       .from("signature_requests")
-      .insert({ token, expires_at: expiresAt });
+      .insert({ token });
     if (error) throw error;
     const url = resolvePublicUrl(`signature-pad.html?t=${encodeURIComponent(token)}`);
-    signaturePhoneRequest = { token, url, expiresAt };
+    signaturePhoneRequest = { token, url };
     if (signaturePhoneLink) {
       signaturePhoneLink.textContent = url;
       signaturePhoneLink.href = url;
