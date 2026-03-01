@@ -150,17 +150,14 @@
     const pad = document.getElementById("signaturePad");
     const clearBtn = document.getElementById("clearPad");
     const submitBtn = document.getElementById("submitPad");
-    const params = new URLSearchParams(window.location.search);
-    const token = (params.get("t") || params.get("token") || "").trim();
+    const token = "shared";
 
     function setStatus(text, isError = false) {
       statusEl.textContent = text;
       statusEl.style.color = isError ? "#ffb0b0" : "#b8c5de";
     }
 
-    if (!token) {
-      setStatus("Missing or invalid token.", true);
-    } else if (!client) {
+    if (!client) {
       setStatus("Supabase client unavailable.", true);
     } else {
       setStatus("Draw your signature, then approve.");
@@ -222,7 +219,7 @@
 
     if (submitBtn) {
       submitBtn.addEventListener("click", async () => {
-        if (!client || !token) return;
+        if (!client) return;
         if (!hasInk) {
           setStatus("Draw your signature first.", true);
           return;
@@ -233,7 +230,7 @@
         try {
           const { data, error } = await client
             .from("signature_requests")
-            .update({ signature_data: dataUrl, used_at: now })
+            .upsert({ token, signature_data: dataUrl, used_at: now }, { onConflict: "token" })
             .eq("token", token)
             .is("used_at", null)
             .select("token");

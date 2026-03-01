@@ -2061,9 +2061,9 @@ function setAuthSignatureMode(mode) {
   if (authSignatureFileInput) authSignatureFileInput.disabled = normalized !== "upload";
 }
 
-let signaturePhoneRequest = null;
-let signaturePhonePollTimer = null;
-let signaturePhoneQrEngine = null;
+  let signaturePhoneRequest = null;
+  let signaturePhonePollTimer = null;
+  let signaturePhoneQrEngine = null;
 
 function setSignaturePhoneStatus(text, isError = false) {
   if (!signaturePhoneStatus) return;
@@ -2102,64 +2102,62 @@ async function cancelSignaturePhoneRequest() {
   clearSignaturePhoneRequest();
 }
 
-async function pollSignaturePhoneRequest() {
-  if (!signaturePhoneRequest || !supabaseClient) return;
-  const { token } = signaturePhoneRequest;
-  try {
-    const { data, error } = await supabaseClient
-      .from("signature_requests")
-      .select("signature_data, used_at, expires_at")
-      .eq("token", token)
-      .maybeSingle();
-    if (error) throw error;
-    if (!data) {
-      setSignaturePhoneStatus("Signature request not found.", true);
-      stopSignaturePhonePolling();
-      return;
-    }
-    if (data.expires_at && Date.parse(data.expires_at) < Date.now()) {
-      setSignaturePhoneStatus("Signature request expired.", true);
-      stopSignaturePhonePolling();
-      return;
-    }
-    if (data.signature_data) {
-      employeeSignatureBaseDataUrl = data.signature_data;
-      renderEmployeeSignatureFromBase();
+  async function pollSignaturePhoneRequest() {
+    if (!signaturePhoneRequest || !supabaseClient) return;
+    const { token } = signaturePhoneRequest;
+    try {
+      const { data, error } = await supabaseClient
+        .from("signature_requests")
+        .select("signature_data, used_at")
+        .eq("token", token)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) {
+        setSignaturePhoneStatus("Signature request not found.", true);
+        stopSignaturePhonePolling();
+        return;
+      }
+      if (data.signature_data) {
+        employeeSignatureBaseDataUrl = data.signature_data;
+        renderEmployeeSignatureFromBase();
       if (signatureX) signatureX.value = "0";
       if (signatureY) signatureY.value = "0";
       if (signatureScale) signatureScale.value = "100";
       if (signatureRotate) signatureRotate.value = "0";
       renderAdjustments();
-      setStatus("Signature received from phone.");
-      stopSignaturePhonePolling();
-      try {
-        await supabaseClient.from("signature_requests").delete().eq("token", token);
-      } catch {
-        // ignore cleanup errors
+        setStatus("Signature received from phone.");
+        stopSignaturePhonePolling();
+        try {
+          await supabaseClient
+            .from("signature_requests")
+            .update({ signature_data: null, used_at: null })
+            .eq("token", token);
+        } catch {
+          // ignore cleanup errors
+        }
+        clearSignaturePhoneRequest();
       }
-      clearSignaturePhoneRequest();
+    } catch (err) {
+      setSignaturePhoneStatus(`Polling failed: ${err.message || err}`, true);
     }
-  } catch (err) {
-    setSignaturePhoneStatus(`Polling failed: ${err.message || err}`, true);
   }
-}
 
-async function startSignaturePhoneRequest() {
-  if (!signaturePhonePanel) return;
-  if (!supabaseClient) {
-    setSignaturePhoneStatus("Supabase unavailable.", true);
-    return;
-  }
-  signaturePhonePanel.hidden = false;
-  setSignaturePhoneStatus("Creating secure link...");
-  const token = generateToken(12);
-  try {
-    const { error } = await supabaseClient
-      .from("signature_requests")
-      .insert({ token });
-    if (error) throw error;
-    const url = resolvePublicUrl(`signature-pad.html?t=${encodeURIComponent(token)}`);
-    signaturePhoneRequest = { token, url };
+  async function startSignaturePhoneRequest() {
+    if (!signaturePhonePanel) return;
+    if (!supabaseClient) {
+      setSignaturePhoneStatus("Supabase unavailable.", true);
+      return;
+    }
+    signaturePhonePanel.hidden = false;
+    setSignaturePhoneStatus("Creating secure link...");
+    const token = "shared";
+    try {
+      const { error } = await supabaseClient
+        .from("signature_requests")
+        .upsert({ token }, { onConflict: "token" });
+      if (error) throw error;
+      const url = resolvePublicUrl("signature-pad.html?v=3");
+      signaturePhoneRequest = { token, url };
     if (signaturePhoneLink) {
       signaturePhoneLink.textContent = url;
       signaturePhoneLink.href = url;
