@@ -36,6 +36,7 @@ const defaultsStorageKey = "idCardCreatorSavedDefaultsV2";
 const watermarkStorageKey = "idCardCreatorWatermarkSettingsV1";
 const previewAccessStorageKey = "idCardCreatorPreviewEnabledV1";
 const previewInfoStorageKey = "idCardCreatorPreviewInfoEnabledV1";
+const localSettingsTsKey = "idCardCreatorLocalSettingsTsV1";
 const cloudStore = window.idCardCloudStore;
 let cloudReady = !window.__idCardCloudReady;
 
@@ -397,7 +398,11 @@ function loadWatermarkSettings() {
 }
 
 function loadPreviewAccessSetting() {
-  previewAccessEnabled = parseStoredBool(getStoreItem(previewAccessStorageKey), true);
+  const cloudValue = getStoreItem(previewAccessStorageKey);
+  const localValue = readLocalSetting(previewAccessStorageKey);
+  const localTs = localSettingsTs[previewAccessStorageKey] || 0;
+  const useLocal = localValue !== null && Date.now() - localTs < 10 * 60 * 1000;
+  previewAccessEnabled = parseStoredBool(useLocal ? localValue : cloudValue, true);
   if (previewAccessToggle) previewAccessToggle.checked = previewAccessEnabled;
   setPreviewAccessLocalCache(previewAccessEnabled ? "true" : "false");
 }
@@ -405,15 +410,21 @@ function loadPreviewAccessSetting() {
 function savePreviewAccessSetting() {
   setStoreItem(previewAccessStorageKey, previewAccessEnabled ? "true" : "false");
   setPreviewAccessLocalCache(previewAccessEnabled ? "true" : "false");
+  upsertAppSetting(previewAccessStorageKey, previewAccessEnabled ? "true" : "false");
 }
 
 function loadPreviewInfoSetting() {
-  previewInfoEnabled = parseStoredBool(getStoreItem(previewInfoStorageKey), true);
+  const cloudValue = getStoreItem(previewInfoStorageKey);
+  const localValue = readLocalSetting(previewInfoStorageKey);
+  const localTs = localSettingsTs[previewInfoStorageKey] || 0;
+  const useLocal = localValue !== null && Date.now() - localTs < 10 * 60 * 1000;
+  previewInfoEnabled = parseStoredBool(useLocal ? localValue : cloudValue, true);
   if (previewInfoToggle) previewInfoToggle.checked = previewInfoEnabled;
 }
 
 function savePreviewInfoSetting() {
   setStoreItem(previewInfoStorageKey, previewInfoEnabled ? "true" : "false");
+  upsertAppSetting(previewInfoStorageKey, previewInfoEnabled ? "true" : "false");
 }
 
 function buildWatermarkMarkup(text, rows, cols) {
@@ -1146,20 +1157,28 @@ if (previewAccessToggle) {
   previewAccessToggle.addEventListener("input", () => {
     previewAccessEnabled = !!previewAccessToggle.checked;
     savePreviewAccessSetting();
+    writeLocalSetting(previewAccessStorageKey, previewAccessEnabled ? "true" : "false");
+    markLocalSettingUpdated(previewAccessStorageKey);
   });
   previewAccessToggle.addEventListener("change", () => {
     previewAccessEnabled = !!previewAccessToggle.checked;
     savePreviewAccessSetting();
+    writeLocalSetting(previewAccessStorageKey, previewAccessEnabled ? "true" : "false");
+    markLocalSettingUpdated(previewAccessStorageKey);
   });
 }
 if (previewInfoToggle) {
   previewInfoToggle.addEventListener("input", () => {
     previewInfoEnabled = !!previewInfoToggle.checked;
     savePreviewInfoSetting();
+    writeLocalSetting(previewInfoStorageKey, previewInfoEnabled ? "true" : "false");
+    markLocalSettingUpdated(previewInfoStorageKey);
   });
   previewInfoToggle.addEventListener("change", () => {
     previewInfoEnabled = !!previewInfoToggle.checked;
     savePreviewInfoSetting();
+    writeLocalSetting(previewInfoStorageKey, previewInfoEnabled ? "true" : "false");
+    markLocalSettingUpdated(previewInfoStorageKey);
   });
 }
 
@@ -2260,6 +2279,7 @@ const adminPasswordInput = document.getElementById("adminPassword");
 const adminLoginSubmitBtn = document.getElementById("adminLoginSubmit");
 const adminLoginCancelBtn = document.getElementById("adminLoginCancel");
 const adminLoginErrorEl = document.getElementById("adminLoginError");
+const adminSettingsPanel = document.getElementById("adminSettingsPanel");
 const themeToggleBtn = document.getElementById("themeToggleBtn");
 const superAdminCurrentPasswordInput = document.getElementById("superAdminCurrentPassword");
 const superAdminNewUsernameInput = document.getElementById("superAdminNewUsername");
@@ -2300,6 +2320,18 @@ async function getAuthSession() {
     return data && data.session ? data.session : null;
   } catch {
     return null;
+  }
+}
+
+async function upsertAppSetting(key, value) {
+  if (!supabaseClient) return;
+  try {
+    const { error } = await supabaseClient
+      .from("app_settings")
+      .upsert({ key: String(key), value: String(value) }, { onConflict: "key" });
+    if (error) throw error;
+  } catch {
+    // ignore write errors; cloud sync will retry
   }
 }
 
@@ -2368,7 +2400,9 @@ const adminAllowedWhileLocked = new Set([
   "signatory",
   "signatoryTitle",
   "address",
-  "telephone"
+  "telephone",
+  "previewAccessToggle",
+  "previewInfoToggle"
 ]);
 let adminUnlocked = false;
 let isDarkMode = false;
@@ -2379,6 +2413,63 @@ let appSignedInRole = "admin";
 let cardZoomToken = 0;
 let cardZoomHideTimer = null;
 let entryGateCheckInProgress = false;
+let settingsFlushTimer = null;
+const localSettingsTs = {};
+
+function scheduleSettingsFlush() {
+  if (!cloudStore || typeof cloudStore.flush !== "function") return;
+  if (settingsFlushTimer) clearTimeout(settingsFlushTimer);
+  settingsFlushTimer = setTimeout(() => {
+    settingsFlushTimer = null;
+    cloudStore.flush().catch(() => {});
+  }, 300);
+}
+
+function loadLocalSettingsTs() {
+  try {
+    const raw = window.localStorage.getItem(localSettingsTsKey);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") {
+      Object.assign(localSettingsTs, parsed);
+    }
+  } catch {
+    // ignore local storage failures
+  }
+}
+
+function saveLocalSettingsTs() {
+  try {
+    window.localStorage.setItem(localSettingsTsKey, JSON.stringify(localSettingsTs));
+  } catch {
+    // ignore local storage failures
+  }
+}
+
+function markLocalSettingUpdated(key) {
+  localSettingsTs[key] = Date.now();
+  saveLocalSettingsTs();
+}
+
+function readLocalSetting(key) {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalSetting(key, value) {
+  try {
+    if (value === null || value === undefined) {
+      window.localStorage.removeItem(key);
+    } else {
+      window.localStorage.setItem(key, String(value));
+    }
+  } catch {
+    // ignore local storage failures
+  }
+}
 
 function persistEntryLoginSession(source = "entry") {
   removeStoreItem(logoutTsStorageKey);
@@ -2781,12 +2872,31 @@ function applyAdminAccessState() {
 }
 
 function openAdminLoginModal() {
-  if (!adminLoginModal) return;
-  adminLoginModal.hidden = false;
-  if (adminLoginErrorEl) adminLoginErrorEl.hidden = true;
-  if (adminUsernameInput) adminUsernameInput.value = "";
-  if (adminPasswordInput) adminPasswordInput.value = "";
-  if (adminUsernameInput) adminUsernameInput.focus();
+  getAuthSession()
+    .then((session) => {
+      if (session) {
+        adminUnlocked = true;
+        adminLastActivityTs = Date.now();
+        persistEntryLoginSession("unlock");
+        applyAdminAccessState();
+        setStatus("Settings unlocked.");
+        return;
+      }
+      if (!adminLoginModal) return;
+      adminLoginModal.hidden = false;
+      if (adminLoginErrorEl) adminLoginErrorEl.hidden = true;
+      if (adminUsernameInput) adminUsernameInput.value = "";
+      if (adminPasswordInput) adminPasswordInput.value = "";
+      if (adminUsernameInput) adminUsernameInput.focus();
+    })
+    .catch(() => {
+      if (!adminLoginModal) return;
+      adminLoginModal.hidden = false;
+      if (adminLoginErrorEl) adminLoginErrorEl.hidden = true;
+      if (adminUsernameInput) adminUsernameInput.value = "";
+      if (adminPasswordInput) adminPasswordInput.value = "";
+      if (adminUsernameInput) adminUsernameInput.focus();
+    });
 }
 
 function closeAdminLoginModal() {
@@ -3884,6 +3994,7 @@ syncEntryLoginLogo();
 updateAllCardContrastModes();
 loadSuperAdminCredentials();
 loadAdminCredentials();
+loadLocalSettingsTs();
 loadInterfaceTheme();
 applyAdminAccessState();
 if (cloudReady) {
@@ -3897,6 +4008,14 @@ if (entryLogoutBtn) entryLogoutBtn.addEventListener("click", logoutEntrySession)
 if (adminLoginSubmitBtn) adminLoginSubmitBtn.addEventListener("click", submitAdminLogin);
 if (adminLoginCancelBtn) adminLoginCancelBtn.addEventListener("click", closeAdminLoginModal);
 if (entryLoginSubmitBtn) entryLoginSubmitBtn.addEventListener("click", submitEntryLogin);
+if (adminSettingsPanel) {
+  ["input", "change"].forEach((evtName) => {
+    adminSettingsPanel.addEventListener(evtName, () => {
+      if (!adminUnlocked) return;
+      scheduleSettingsFlush();
+    });
+  });
+}
 if (entryLoginUsernameInput) {
   entryLoginUsernameInput.addEventListener("keydown", (evt) => {
     if (evt.key === "Enter") submitEntryLogin();

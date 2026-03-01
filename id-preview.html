@@ -485,7 +485,8 @@
         p_id: query.id || null
       });
       if (error) throw error;
-      return mapCloudRowToApprovedRecord(data);
+      const row = Array.isArray(data) ? data[0] : data;
+      return mapCloudRowToApprovedRecord(row);
     }
 
     function parseValidityDate(value) {
@@ -559,6 +560,26 @@
           return;
         }
         window.localStorage.setItem(previewAccessStorageKey, String(value));
+      } catch {
+        // ignore local storage failures
+      }
+    }
+
+    function readLocalPreviewInfo() {
+      try {
+        return window.localStorage.getItem(previewInfoStorageKey);
+      } catch {
+        return null;
+      }
+    }
+
+    function writeLocalPreviewInfo(value) {
+      try {
+        if (value === null || value === undefined) {
+          window.localStorage.removeItem(previewInfoStorageKey);
+          return;
+        }
+        window.localStorage.setItem(previewInfoStorageKey, String(value));
       } catch {
         // ignore local storage failures
       }
@@ -685,7 +706,13 @@
     }
 
     function isPreviewInfoEnabled() {
-      return parseStoredBool(getStoreItem(previewInfoStorageKey), true);
+      const cloudValue = getStoreItem(previewInfoStorageKey);
+      if (cloudValue !== null && cloudValue !== undefined) {
+        writeLocalPreviewInfo(cloudValue);
+        return parseStoredBool(cloudValue, true);
+      }
+      const localValue = readLocalPreviewInfo();
+      return parseStoredBool(localValue, true);
     }
 
     function renderRecord(record) {
@@ -768,6 +795,8 @@
         boot();
       }
       if (key === previewInfoStorageKey) {
+        const enabled = isPreviewInfoEnabled();
+        writeLocalPreviewInfo(enabled ? "true" : "false");
         boot();
       }
       if (key === creatorCreditPhotoStorageKey || key === creatorCreditTextStorageKey) {
