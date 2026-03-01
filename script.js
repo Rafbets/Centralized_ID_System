@@ -2688,6 +2688,7 @@ const cameraCapture = document.getElementById("cameraCapture");
 const cameraUse = document.getElementById("cameraUse");
 const cameraError = document.getElementById("cameraError");
 const cameraHint = document.getElementById("cameraHint");
+const cameraDeviceSelect = document.getElementById("cameraDeviceSelect");
 let cameraStream = null;
 let cameraDataUrl = "";
 const creatorTrademarkBtn = document.getElementById("creatorTrademarkBtn");
@@ -4696,6 +4697,44 @@ function closeCameraModal() {
   stopCameraStream({ hard: true });
 }
 
+async function populateCameraDevices(selectedId) {
+  if (!cameraDeviceSelect || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cameras = devices.filter((device) => device && device.kind === "videoinput");
+    const current = selectedId || cameraDeviceSelect.value || "";
+    const options = [
+      { id: "", label: "Default camera" },
+      ...cameras.map((device, index) => ({
+        id: device.deviceId,
+        label: device.label || `Camera ${index + 1}`
+      }))
+    ];
+    cameraDeviceSelect.innerHTML = "";
+    options.forEach((option) => {
+      const el = document.createElement("option");
+      el.value = option.id;
+      el.textContent = option.label;
+      cameraDeviceSelect.appendChild(el);
+    });
+    if (options.some((opt) => opt.id === current)) {
+      cameraDeviceSelect.value = current;
+    }
+  } catch {
+    // ignore device enumeration errors
+  }
+}
+
+async function startCameraStream(deviceId) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return null;
+  stopCameraStream();
+  const constraints = deviceId
+    ? { video: { deviceId: { exact: deviceId } }, audio: false }
+    : { video: { facingMode: "user" }, audio: false };
+  cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+  return cameraStream;
+}
+
 async function openCameraModal() {
   if (!cameraModal || !cameraVideo) return;
   if (cameraHint) cameraHint.hidden = true;
@@ -4734,11 +4773,13 @@ async function openCameraModal() {
     return;
   }
   try {
-    cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+    const preferredDeviceId = cameraDeviceSelect ? cameraDeviceSelect.value : "";
+    cameraStream = await startCameraStream(preferredDeviceId);
     cameraVideo.srcObject = cameraStream;
     cameraVideo.muted = true;
     cameraVideo.playsInline = true;
     cameraVideo.setAttribute("playsinline", "");
+    await populateCameraDevices(preferredDeviceId);
     if (typeof cameraVideo.play === "function") {
       await cameraVideo.play();
     }
@@ -4769,7 +4810,11 @@ function captureCameraPhoto() {
   cameraCanvas.height = height;
   const ctx = cameraCanvas.getContext("2d");
   if (!ctx) return;
+  ctx.save();
+  ctx.translate(width, 0);
+  ctx.scale(-1, 1);
   ctx.drawImage(cameraVideo, 0, 0, width, height);
+  ctx.restore();
   cameraDataUrl = cameraCanvas.toDataURL("image/png");
   cameraCanvas.hidden = false;
   if (cameraVideo) cameraVideo.style.display = "none";
@@ -4838,6 +4883,27 @@ if (openCameraBtn) openCameraBtn.addEventListener("click", openCameraModal);
 if (cameraCancel) cameraCancel.addEventListener("click", closeCameraModal);
 if (cameraCapture) cameraCapture.addEventListener("click", captureCameraPhoto);
 if (cameraUse) cameraUse.addEventListener("click", useCapturedPhoto);
+if (cameraDeviceSelect) {
+  cameraDeviceSelect.addEventListener("change", async () => {
+    if (!cameraModal || cameraModal.hidden) return;
+    try {
+      if (cameraError) cameraError.hidden = true;
+      const deviceId = cameraDeviceSelect.value || "";
+      const stream = await startCameraStream(deviceId);
+      if (cameraVideo) {
+        cameraVideo.srcObject = stream;
+        if (typeof cameraVideo.play === "function") {
+          await cameraVideo.play();
+        }
+      }
+    } catch {
+      if (cameraError) {
+        cameraError.textContent = "Unable to access selected camera.";
+        cameraError.hidden = false;
+      }
+    }
+  });
+}
 if (cameraModal) {
   cameraModal.addEventListener("click", (evt) => {
     if (evt.target === cameraModal) closeCameraModal();

@@ -1800,20 +1800,56 @@ textarea:focus {
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
+.camera-device {
+  display: grid;
+  gap: 6px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #c9d6f4;
+  text-align: center;
+  justify-items: center;
+}
+
+.camera-device select {
+  border: 1px solid rgba(120, 146, 198, 0.4);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: rgba(12, 16, 26, 0.8);
+  color: #e6eefc;
+  font: 700 0.78rem "Roboto Condensed", sans-serif;
+  text-align: center;
+}
+
+.camera-preview {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 0;
+  padding: 10px;
+  border: 1px solid rgba(110, 130, 180, 0.3);
+  background:
+    linear-gradient(135deg, rgba(9, 14, 26, 0.92), rgba(20, 26, 40, 0.92));
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
 .camera-video,
 .camera-canvas {
   width: 100%;
   min-height: 240px;
-  border-radius: 10px;
-  border: 1px solid rgba(110, 130, 180, 0.3);
-  background:
-    linear-gradient(135deg, rgba(9, 14, 26, 0.92), rgba(20, 26, 40, 0.92));
+  height: 100%;
+  border-radius: 0;
+  border: 1px solid rgba(110, 130, 180, 0.35);
+  background: #0c111b;
+  object-fit: cover;
 }
 
 .camera-video {
-  box-shadow:
-    0 12px 28px rgba(0, 0, 0, 0.5),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  display: block;
+  transform: scaleX(-1);
 }
 
 .camera-card .confirm-title {
@@ -1822,14 +1858,56 @@ textarea:focus {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #e9f1ff;
+  text-align: center;
 }
 
 .camera-card .confirm-text {
   font-size: 0.84rem;
   line-height: 1.4;
   color: #b8c7e6;
+  text-align: center;
 }
 
+.camera-card .auth-error {
+  text-align: center;
+}
+
+.camera-card .confirm-actions {
+  justify-content: center;
+  width: 100%;
+}
+
+.camera-card .confirm-actions .btn {
+  min-width: 112px;
+  border-radius: 999px;
+  padding: 9px 18px;
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: linear-gradient(160deg, #3b6ff0, #2b56c9);
+  box-shadow: 0 10px 18px rgba(34, 72, 170, 0.3);
+}
+
+.camera-card .confirm-actions .btn:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 14px 26px rgba(34, 72, 170, 0.35);
+}
+
+.camera-card .confirm-actions .btn.btn-danger {
+  background: linear-gradient(160deg, #d85656, #b02727);
+  box-shadow: 0 10px 18px rgba(180, 50, 50, 0.28);
+}
+
+.camera-card #cameraCancel {
+  background: linear-gradient(160deg, #e25555, #b22a2a);
+  box-shadow: 0 10px 18px rgba(180, 50, 50, 0.3);
+}
+
+.camera-card #cameraCapture,
+.camera-card #cameraUse {
+  background: linear-gradient(160deg, #29b36a, #1f8d52);
+  box-shadow: 0 10px 18px rgba(30, 140, 85, 0.3);
+}
 .camera-card::after {
   content: "";
   position: absolute;

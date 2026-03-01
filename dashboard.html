@@ -543,8 +543,16 @@ If found, please call our main office</textarea>
     <div class="confirm-card camera-card" role="dialog" aria-modal="true" aria-labelledby="cameraTitle">
       <h2 id="cameraTitle" class="confirm-title">Capture Profile Photo</h2>
       <p class="confirm-text">Allow camera access, then capture a photo for the profile.</p>
-      <video id="cameraVideo" class="camera-video" autoplay playsinline></video>
-      <canvas id="cameraCanvas" class="camera-canvas" hidden></canvas>
+      <label class="camera-device">
+        Camera
+        <select id="cameraDeviceSelect">
+          <option value="">Default camera</option>
+        </select>
+      </label>
+      <div class="camera-preview">
+        <video id="cameraVideo" class="camera-video" autoplay playsinline></video>
+        <canvas id="cameraCanvas" class="camera-canvas" hidden></canvas>
+      </div>
       <p id="cameraError" class="auth-error" hidden>Unable to access camera.</p>
       <div class="confirm-actions">
         <button id="cameraCancel" class="btn" type="button">Cancel</button>
