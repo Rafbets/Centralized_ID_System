@@ -6,6 +6,20 @@
   <title>Approved ID Previews</title>
   <script>
     (function () {
+      try {
+        const saved = window.localStorage.getItem("idCardCreatorInterfaceThemeV1");
+        if (saved === "dark") {
+          document.documentElement.classList.add("theme-dark");
+        } else {
+          document.documentElement.classList.remove("theme-dark");
+        }
+      } catch {
+        // ignore storage errors
+      }
+    })();
+  </script>
+  <script>
+    (function () {
       document.documentElement.classList.add("credit-loading");
       try {
         const hasPhoto = !!window.localStorage.getItem("idCardCreatorCreatorCreditPhotoV1");

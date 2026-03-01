@@ -4,8 +4,25 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ID Card Dashboard</title>
+  <style>
+    html, body { visibility: hidden; }
+    html.theme-ready, body.theme-ready { visibility: visible; }
+  </style>
   <script>
     (function () {
+      try {
+        const savedTheme = window.localStorage.getItem("idCardCreatorInterfaceThemeV1");
+        if (!savedTheme) {
+          window.localStorage.setItem("idCardCreatorInterfaceThemeV1", "dark");
+          document.documentElement.classList.add("theme-dark");
+        } else if (savedTheme === "dark") {
+          document.documentElement.classList.add("theme-dark");
+        } else {
+          document.documentElement.classList.remove("theme-dark");
+        }
+      } catch {
+        document.documentElement.classList.add("theme-dark");
+      }
       document.documentElement.classList.add("credit-loading");
       try {
         const hasPhoto = !!window.localStorage.getItem("idCardCreatorCreatorCreditPhotoV1");
@@ -14,6 +31,7 @@
       } catch {
         // ignore storage errors
       }
+      document.documentElement.classList.add("theme-ready");
     })();
   </script>
   <link rel="stylesheet" href="styles.css" />
@@ -94,6 +112,7 @@
       } catch {
         document.body.classList.remove("theme-dark");
       }
+      document.body.classList.add("theme-ready");
     })();
   </script>
   <div id="appLoadingOverlay" class="app-loading-overlay" aria-live="polite" aria-busy="true">
