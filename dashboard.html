@@ -361,8 +361,10 @@ If found, please call our main office</textarea>
           <div class="control-box-title">Profile Photo Control</div>
           <div class="photo-upload">
             <label for="photoFile" class="upload-btn">Choose Profile Photo</label>
-            <input id="photoFile" type="file" accept="image/*" />
+            <input id="photoFile" type="file" accept="image/*" capture="user" />
+            <button id="openCameraBtn" type="button" class="upload-btn camera-btn">Use Camera</button>
           </div>
+          <p id="cameraHint" class="auth-error" hidden>Camera works only on https:// or http://localhost.</p>
           <button id="profileAdjustToggle" type="button" class="profile-adjust-toggle">Adjust</button>
           <div id="profileAdjustPanel" class="profile-adjust-grid" hidden>
             <label>X <input id="profileX" type="range" min="-120" max="120" value="0" /></label>
@@ -510,6 +512,20 @@ If found, please call our main office</textarea>
     <p id="creatorCreditText" class="footer-credit-text">Powered by Rafael Betinol — Professional &amp; Secure ID Creation</p>
     <button id="creatorTrademarkBtn" type="button" class="credit-photo-set" aria-label="Edit trademark settings" hidden>TM</button>
   </section>
+  <div id="cameraModal" class="confirm-modal" hidden>
+    <div class="confirm-card camera-card" role="dialog" aria-modal="true" aria-labelledby="cameraTitle">
+      <h2 id="cameraTitle" class="confirm-title">Capture Profile Photo</h2>
+      <p class="confirm-text">Allow camera access, then capture a photo for the profile.</p>
+      <video id="cameraVideo" class="camera-video" autoplay playsinline></video>
+      <canvas id="cameraCanvas" class="camera-canvas" hidden></canvas>
+      <p id="cameraError" class="auth-error" hidden>Unable to access camera.</p>
+      <div class="confirm-actions">
+        <button id="cameraCancel" class="btn" type="button">Cancel</button>
+        <button id="cameraCapture" class="btn" type="button">Capture</button>
+        <button id="cameraUse" class="btn" type="button" hidden>Use Photo</button>
+      </div>
+    </div>
+  </div>
   <script>
     (function () {
       const photoEl = document.getElementById("creatorCreditPhoto");
@@ -638,9 +654,29 @@ If found, please call our main office</textarea>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="cloud-sync.js"></script>
   <script>
+    const cameraBtnFallback = document.getElementById("openCameraBtn");
+    const cameraHintFallback = document.getElementById("cameraHint");
+    if (cameraBtnFallback) {
+      cameraBtnFallback.addEventListener("click", () => {
+        if (typeof window.openCameraModal === "function") {
+          window.openCameraModal();
+          return;
+        }
+        if (cameraHintFallback) {
+          cameraHintFallback.textContent = "Camera module not loaded. Hard refresh (Ctrl+F5).";
+          cameraHintFallback.hidden = false;
+        }
+      });
+    }
     (window.__idCardCloudReady || Promise.resolve()).finally(() => {
       const appScript = document.createElement("script");
-      appScript.src = "script.js";
+      appScript.src = `script.js?v=${Date.now()}`;
+      appScript.onerror = () => {
+        if (cameraHintFallback) {
+          cameraHintFallback.textContent = "Failed to load app script. Check server and hard refresh.";
+          cameraHintFallback.hidden = false;
+        }
+      };
       document.body.appendChild(appScript);
     });
   </script>

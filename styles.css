@@ -1695,6 +1695,23 @@ textarea:focus {
   border-radius: 9px;
 }
 
+.camera-btn {
+  padding: 6px 10px;
+  font: 700 0.72rem "Roboto Condensed", sans-serif;
+}
+
+.camera-card {
+  max-width: min(520px, 92vw);
+}
+
+.camera-video,
+.camera-canvas {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(110, 130, 180, 0.3);
+  background: rgba(12, 18, 28, 0.6);
+}
+
 .form-panel .upload-grid,
 .form-panel .admin-settings-panel,
 .form-panel .theme-tools,

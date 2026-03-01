@@ -176,6 +176,25 @@ function saveImageDefaultFromFile(file, key) {
   });
 }
 
+function dataUrlToFile(dataUrl, fileName) {
+  try {
+    const parts = String(dataUrl || "").split(",");
+    if (parts.length < 2) return null;
+    const meta = parts[0];
+    const b64 = parts[1];
+    const mimeMatch = meta.match(/data:(.*?);base64/);
+    const mime = mimeMatch ? mimeMatch[1] : "image/png";
+    const binary = atob(b64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i += 1) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: mime });
+    return new File([blob], fileName || "image.png", { type: mime });
+  } catch {
+    return null;
+  }
+}
+
 function applySavedDefaultValues() {
   defaultFieldIds.forEach((id) => {
     const el = document.getElementById(id);
@@ -2289,6 +2308,17 @@ const entryLoginErrorEl = document.getElementById("entryLoginError");
 const entryLoginLogo = document.getElementById("entryLoginLogo");
 const creatorCreditPhoto = document.getElementById("creatorCreditPhoto");
 const creatorCreditText = document.getElementById("creatorCreditText");
+const openCameraBtn = document.getElementById("openCameraBtn");
+const cameraModal = document.getElementById("cameraModal");
+const cameraVideo = document.getElementById("cameraVideo");
+const cameraCanvas = document.getElementById("cameraCanvas");
+const cameraCancel = document.getElementById("cameraCancel");
+const cameraCapture = document.getElementById("cameraCapture");
+const cameraUse = document.getElementById("cameraUse");
+const cameraError = document.getElementById("cameraError");
+const cameraHint = document.getElementById("cameraHint");
+let cameraStream = null;
+let cameraDataUrl = "";
 const creatorTrademarkBtn = document.getElementById("creatorTrademarkBtn");
 const creatorTrademarkModal = document.getElementById("creatorTrademarkModal");
 const creatorTrademarkUsernameInput = document.getElementById("creatorTrademarkUsername");
@@ -4239,6 +4269,93 @@ function closeCreatorTrademarkModal() {
   pendingCreatorPhotoDataUrl = "";
 }
 
+function stopCameraStream() {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach((track) => track.stop());
+    cameraStream = null;
+  }
+}
+
+function closeCameraModal() {
+  if (cameraModal) cameraModal.hidden = true;
+  if (cameraVideo) cameraVideo.srcObject = null;
+  if (cameraCanvas) cameraCanvas.hidden = true;
+  if (cameraUse) cameraUse.hidden = true;
+  if (cameraCapture) cameraCapture.hidden = false;
+  if (cameraError) cameraError.hidden = true;
+  cameraDataUrl = "";
+  stopCameraStream();
+}
+
+async function openCameraModal() {
+  if (!cameraModal || !cameraVideo) return;
+  if (cameraHint) cameraHint.hidden = true;
+  if (cameraError) cameraError.hidden = true;
+  cameraModal.hidden = false;
+  cameraCanvas.hidden = true;
+  cameraUse.hidden = true;
+  cameraCapture.hidden = false;
+  if (window.location.protocol === "file:") {
+    if (cameraHint) cameraHint.hidden = false;
+    if (cameraError) {
+      cameraError.textContent = "Camera is blocked on file://. Use http://localhost or https://.";
+      cameraError.hidden = false;
+    }
+    return;
+  }
+  if (!window.isSecureContext) {
+    if (cameraError) {
+      cameraError.textContent = "Camera requires a secure context (https:// or http://localhost).";
+      cameraError.hidden = false;
+    }
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    if (cameraError) {
+      cameraError.textContent = "Camera is not supported in this browser.";
+      cameraError.hidden = false;
+    }
+    return;
+  }
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+    cameraVideo.srcObject = cameraStream;
+  } catch (err) {
+    if (cameraError) {
+      cameraError.textContent = "Unable to access camera. Check browser and OS camera permissions.";
+      cameraError.hidden = false;
+    }
+  }
+}
+
+function captureCameraPhoto() {
+  if (!cameraVideo || !cameraCanvas) return;
+  const width = cameraVideo.videoWidth || 640;
+  const height = cameraVideo.videoHeight || 480;
+  cameraCanvas.width = width;
+  cameraCanvas.height = height;
+  const ctx = cameraCanvas.getContext("2d");
+  if (!ctx) return;
+  ctx.drawImage(cameraVideo, 0, 0, width, height);
+  cameraDataUrl = cameraCanvas.toDataURL("image/png");
+  cameraCanvas.hidden = false;
+  if (cameraUse) cameraUse.hidden = false;
+  if (cameraCapture) cameraCapture.hidden = true;
+}
+
+function useCapturedPhoto() {
+  if (!cameraDataUrl) return;
+  const file = dataUrlToFile(cameraDataUrl, "camera-profile.png");
+  if (!file) return;
+  if (photoFileInput) {
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    photoFileInput.files = dt.files;
+    photoFileInput.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  closeCameraModal();
+}
+
 function saveCreatorTrademarkChanges() {
   if (!adminUnlocked || appSignedInRole !== "superadmin") {
     if (creatorTrademarkErrorEl) creatorTrademarkErrorEl.hidden = false;
@@ -4282,6 +4399,15 @@ if (creatorCreditPhotoFileInput) {
 if (creatorTrademarkBtn) creatorTrademarkBtn.addEventListener("click", openCreatorTrademarkModal);
 if (creatorTrademarkSaveBtn) creatorTrademarkSaveBtn.addEventListener("click", saveCreatorTrademarkChanges);
 if (creatorTrademarkCancelBtn) creatorTrademarkCancelBtn.addEventListener("click", closeCreatorTrademarkModal);
+if (openCameraBtn) openCameraBtn.addEventListener("click", openCameraModal);
+if (cameraCancel) cameraCancel.addEventListener("click", closeCameraModal);
+if (cameraCapture) cameraCapture.addEventListener("click", captureCameraPhoto);
+if (cameraUse) cameraUse.addEventListener("click", useCapturedPhoto);
+if (cameraModal) {
+  cameraModal.addEventListener("click", (evt) => {
+    if (evt.target === cameraModal) closeCameraModal();
+  });
+}
 if (creatorTrademarkPasswordInput) {
   creatorTrademarkPasswordInput.addEventListener("keydown", (evt) => {
     if (evt.key === "Enter") saveCreatorTrademarkChanges();
@@ -4316,6 +4442,9 @@ if (cardZoomModal) {
 document.addEventListener("keydown", (evt) => {
   if (evt.key === "Escape" && cardZoomModal && !cardZoomModal.hidden) {
     closeCardZoomModal();
+  }
+  if (evt.key === "Escape" && cameraModal && !cameraModal.hidden) {
+    closeCameraModal();
   }
 });
 
