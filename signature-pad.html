@@ -37,28 +37,29 @@
     }
 
     header {
-      padding: 12px 14px 6px;
+      padding: 10px 14px 4px;
       display: grid;
-      gap: 6px;
+      gap: 4px;
     }
 
     h1 {
       margin: 0;
-      font-size: 1.05rem;
-      letter-spacing: 0.08em;
+      font-size: 0.82rem;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
       color: #dbe7ff;
     }
 
     #status {
       margin: 0;
-      font-size: 0.82rem;
+      font-size: 0.7rem;
       color: var(--muted);
     }
 
     .pad-wrap {
       padding: 10px;
       display: grid;
+      position: relative;
     }
 
     canvas {
@@ -71,27 +72,31 @@
     }
 
     .actions {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      padding: 4px 14px 10px;
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      display: inline-flex;
+      gap: 8px;
+      padding: 0;
+      z-index: 2;
     }
 
     button {
       border: none;
-      border-radius: 10px;
-      padding: 12px 14px;
-      font: 700 0.78rem "Roboto Condensed", sans-serif;
+      border-radius: 8px;
+      padding: 6px 10px;
+      font: 700 0.62rem "Roboto Condensed", sans-serif;
       letter-spacing: 0.04em;
       color: #fff;
       background: linear-gradient(160deg, var(--accent), var(--accent-deep));
       cursor: pointer;
-      box-shadow: 0 10px 16px rgba(33, 74, 190, 0.28);
+      box-shadow: 0 6px 10px rgba(33, 74, 190, 0.25);
+      white-space: nowrap;
     }
 
     button.secondary {
       background: linear-gradient(160deg, #58647c, #424d61);
-      box-shadow: 0 8px 14px rgba(35, 46, 70, 0.35);
+      box-shadow: 0 6px 10px rgba(35, 46, 70, 0.3);
     }
 
     button:disabled {
@@ -106,11 +111,11 @@
     <h1>Signature Pad</h1>
     <p id="status">Loading...</p>
   </header>
-  <div class="actions">
-    <button id="clearPad" class="secondary" type="button">Clear</button>
-    <button id="submitPad" type="button">Approve Signature</button>
-  </div>
   <div class="pad-wrap">
+    <div class="actions">
+      <button id="clearPad" class="secondary" type="button">Clear</button>
+      <button id="submitPad" type="button">Approve Signature</button>
+    </div>
     <canvas id="signaturePad" aria-label="Signature drawing pad"></canvas>
   </div>
 
