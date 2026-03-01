@@ -7,37 +7,51 @@
   <style>
     :root {
       color-scheme: light dark;
+      --bg-a: #1b2436;
+      --bg-b: #0e141f;
+      --panel: rgba(16, 22, 34, 0.92);
+      --panel-edge: rgba(120, 146, 198, 0.3);
+      --ink: #e8eefc;
+      --muted: #b8c5de;
+      --accent: #2d5bde;
+      --accent-deep: #1f46b8;
     }
 
     * { box-sizing: border-box; }
 
     html, body {
+      width: 100%;
       height: 100%;
     }
 
     body {
       margin: 0;
-      min-height: 100vh;
       display: grid;
-      place-items: center;
+      place-items: stretch;
       font-family: "Roboto Condensed", "Segoe UI", Arial, sans-serif;
-      background: radial-gradient(circle at top, #1b2436, #0e141f);
-      color: #e8eefc;
-      padding: 18px;
+      background: radial-gradient(circle at top, var(--bg-a), var(--bg-b));
+      color: var(--ink);
       overflow: hidden;
       overscroll-behavior: none;
       touch-action: none;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     }
 
     .pad-card {
-      width: min(540px, 94vw);
-      background: linear-gradient(160deg, rgba(24, 32, 48, 0.95), rgba(16, 22, 34, 0.9));
-      border: 1px solid rgba(120, 146, 198, 0.3);
-      border-radius: 16px;
+      width: 100vw;
+      height: 100vh;
+      background: linear-gradient(160deg, rgba(24, 32, 48, 0.96), var(--panel));
+      border: none;
+      border-radius: 0;
       padding: 16px;
       display: grid;
+      grid-template-rows: auto 1fr;
       gap: 12px;
-      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+    }
+
+    .pad-header {
+      display: grid;
+      gap: 6px;
     }
 
     h1 {
@@ -51,62 +65,49 @@
     #status {
       margin: 0;
       font-size: 0.85rem;
-      color: #b8c5de;
+      color: var(--muted);
+    }
+
+    .pad-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 240px;
+      gap: 12px;
+      height: 100%;
+      min-height: 0;
     }
 
     .pad-wrap {
-      border-radius: 12px;
+      border-radius: 14px;
       border: 1px solid rgba(140, 165, 210, 0.4);
       background: #fff;
-      padding: 6px;
+      padding: 8px;
+      display: grid;
     }
 
     canvas {
       width: 100%;
-      height: 180px;
+      height: 100%;
       display: block;
       border-radius: 10px;
       background: #fff;
-    }
-
-    @media (max-width: 720px) {
-      body {
-        padding: 0;
-      }
-
-      .pad-card {
-        width: 100vw;
-        height: 100vh;
-        border-radius: 0;
-        border: none;
-        box-shadow: none;
-        padding: 16px;
-      }
-
-      .pad-wrap {
-        flex: 1;
-      }
-
-      canvas {
-        height: calc(100vh - 240px);
-        max-height: 60vh;
-      }
+      touch-action: none;
     }
 
     .actions {
-      display: flex;
+      display: grid;
+      grid-auto-rows: min-content;
       gap: 10px;
-      flex-wrap: wrap;
+      align-content: start;
     }
 
     button {
       border: none;
-      border-radius: 8px;
-      padding: 10px 14px;
+      border-radius: 10px;
+      padding: 12px 14px;
       font: 700 0.78rem "Roboto Condensed", sans-serif;
       letter-spacing: 0.04em;
       color: #fff;
-      background: linear-gradient(160deg, #2d5bde, #1f46b8);
+      background: linear-gradient(160deg, var(--accent), var(--accent-deep));
       cursor: pointer;
       box-shadow: 0 10px 16px rgba(33, 74, 190, 0.28);
     }
@@ -121,18 +122,38 @@
       cursor: not-allowed;
       box-shadow: none;
     }
+
+    @media (orientation: portrait) {
+      .pad-card {
+        padding: 14px;
+      }
+
+      .pad-layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr auto;
+      }
+
+      .actions {
+        grid-auto-flow: column;
+        grid-auto-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
   <main class="pad-card">
-    <h1>Signature Pad</h1>
-    <p id="status">Loading...</p>
-    <div class="pad-wrap">
-      <canvas id="signaturePad" width="520" height="180" aria-label="Signature drawing pad"></canvas>
+    <div class="pad-header">
+      <h1>Signature Pad</h1>
+      <p id="status">Loading...</p>
     </div>
-    <div class="actions">
-      <button id="clearPad" class="secondary" type="button">Clear</button>
-      <button id="submitPad" type="button">Approve Signature</button>
+    <div class="pad-layout">
+      <div class="pad-wrap">
+        <canvas id="signaturePad" aria-label="Signature drawing pad"></canvas>
+      </div>
+      <div class="actions">
+        <button id="clearPad" class="secondary" type="button">Clear</button>
+        <button id="submitPad" type="button">Approve Signature</button>
+      </div>
     </div>
   </main>
 
@@ -171,10 +192,31 @@
     let drawing = false;
     let hasInk = false;
 
+    function resizeCanvas() {
+      if (!pad) return;
+      const rect = pad.getBoundingClientRect();
+      const prev = hasInk ? pad.toDataURL("image/png") : null;
+      const ratio = Math.max(1, window.devicePixelRatio || 1);
+      pad.width = Math.max(1, Math.floor(rect.width * ratio));
+      pad.height = Math.max(1, Math.floor(rect.height * ratio));
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#111";
+      if (prev) {
+        const img = new Image();
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0, rect.width, rect.height);
+        };
+        img.src = prev;
+      }
+    }
+
     function getPoint(evt) {
       const rect = pad.getBoundingClientRect();
-      const x = ((evt.clientX - rect.left) * pad.width) / rect.width;
-      const y = ((evt.clientY - rect.top) * pad.height) / rect.height;
+      const x = evt.clientX - rect.left;
+      const y = evt.clientY - rect.top;
       return { x, y };
     }
 
@@ -249,6 +291,10 @@
         }
       });
     }
+
+    window.addEventListener("resize", () => requestAnimationFrame(resizeCanvas));
+    window.addEventListener("orientationchange", () => requestAnimationFrame(resizeCanvas));
+    requestAnimationFrame(resizeCanvas);
   </script>
 </body>
 </html>
