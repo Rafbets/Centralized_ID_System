@@ -4,6 +4,18 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ID Preview</title>
+  <script>
+    (function () {
+      document.documentElement.classList.add("credit-loading");
+      try {
+        const hasPhoto = !!window.localStorage.getItem("idCardCreatorCreatorCreditPhotoV1");
+        const hasText = !!window.localStorage.getItem("idCardCreatorCreatorCreditTextV1");
+        if (hasPhoto || hasText) document.documentElement.classList.add("credit-has-local");
+      } catch {
+        // ignore storage errors
+      }
+    })();
+  </script>
   <style>
     :root {
       --bg: #040404;
@@ -62,7 +74,7 @@
       z-index: 1;
       width: min(1180px, 100%);
       margin: 0 auto;
-      padding: 24px 16px 90px;
+      padding: 24px 16px 140px;
       display: grid;
       gap: 14px;
       align-content: start;
@@ -278,40 +290,55 @@
       color: var(--muted);
       padding: 26px 14px;
     }
-    .app-credit {
-      position: fixed;
-      left: 12px;
-      right: 12px;
-      bottom: 10px;
-      z-index: 20;
-      border: 1px solid rgba(197, 197, 205, 0.2);
-      border-radius: 12px;
-      background: rgba(18, 18, 20, 0.9);
-      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5);
+    .credits-box {
       padding: 8px 12px;
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 8px;
-      align-items: center;
-      width: min(700px, calc(100% - 24px));
-      margin: 0 auto;
-      animation: footerFade 650ms ease-out both;
-    }
-    .creator-credit-photo {
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 1px solid rgba(188, 188, 196, 0.24);
-      background: #202024;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      box-shadow: none;
     }
     .footer-credit-text {
       margin: 0;
-      font-size: 0.78rem;
-      color: #b6b7bf;
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: var(--fb-text, #1c1e21);
+      text-align: center;
+      font-family: "Roboto Condensed", "Segoe UI", Arial, sans-serif;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      max-width: 70vw;
+    }
+    .app-credit {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      position: fixed;
+      left: 50%;
+      bottom: 10px;
+      transform: translateX(-50%);
+      z-index: 50;
+      max-width: calc(100vw - 24px);
+    }
+    .app-credit-spacer {
+      height: 70px;
+    }
+    .credit-loading .app-credit,
+    .credit-has-local .app-credit {
+      visibility: hidden;
+    }
+    .credit-ready .app-credit {
+      visibility: visible;
+    }
+    .app-credit img {
+      visibility: inherit;
+    }
+    .creator-credit-photo {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1px solid rgba(24, 119, 242, 0.45);
     }
     body.theme-dark {
       --bg: #020202;
@@ -334,12 +361,13 @@
     body.theme-dark .hero {
       background: linear-gradient(180deg, rgba(29, 29, 33, 0.95), rgba(10, 10, 12, 0.95));
     }
-    body.theme-dark .app-credit {
-      background: rgba(9, 9, 11, 0.94);
-      border-color: rgba(196, 196, 205, 0.24);
+    body.theme-dark .credits-box {
+      border-color: transparent;
+      background: transparent;
+      box-shadow: none;
     }
     body.theme-dark .footer-credit-text {
-      color: #c0c2ca;
+      color: #dbe6ff;
     }
     @keyframes pageFadeIn {
       from { opacity: 0; }
@@ -366,6 +394,9 @@
       }
       .cards {
         grid-template-columns: minmax(240px, 320px);
+      }
+      .app-credit-spacer {
+        height: 70px;
       }
     }
   </style>
@@ -396,15 +427,78 @@
     <section id="messagePanel" class="panel message">Loading ID preview...</section>
   </main>
 
-  <section class="app-credit" aria-label="Footer Credit">
+  <section class="credits-box app-credit" aria-label="Footer Credit" style="visibility: hidden;">
     <img
       id="creatorCreditPhoto"
       class="creator-credit-photo"
-      src="https://i.imgur.com/8Km9tLL.jpeg"
       alt="Creator photo"
+      src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Crect width='160' height='160' rx='80' fill='%23cfd7ea'/%3E%3Ccircle cx='80' cy='63' r='28' fill='%23889abf'/%3E%3Cpath d='M30 140c9-25 29-39 50-39s41 14 50 39' fill='%23889abf'/%3E%3C/svg%3E"
     />
     <p id="creatorCreditText" class="footer-credit-text">Powered by Rafael Betinol — Professional &amp; Secure ID Creation</p>
   </section>
+  <div class="app-credit-spacer" aria-hidden="true"></div>
+  <script>
+    (function () {
+      const photoEl = document.getElementById("creatorCreditPhoto");
+      const textEl = document.getElementById("creatorCreditText");
+      let revealed = false;
+      const applyFromStorage = () => {
+        try {
+          const cloudStore = window.idCardCloudStore;
+          const cloudPhoto = cloudStore ? cloudStore.getItem("idCardCreatorCreatorCreditPhotoV1") : null;
+          const cloudText = cloudStore ? cloudStore.getItem("idCardCreatorCreatorCreditTextV1") : null;
+          const localPhoto = window.localStorage.getItem("idCardCreatorCreatorCreditPhotoV1");
+          const localText = window.localStorage.getItem("idCardCreatorCreatorCreditTextV1");
+          const photo = cloudPhoto || localPhoto;
+          const text = cloudText || localText;
+          if (photoEl) {
+            photoEl.style.visibility = "hidden";
+          }
+          if (photo && photoEl) {
+            photoEl.onload = () => {
+              if (photoEl) photoEl.style.visibility = "visible";
+              reveal();
+            };
+            photoEl.onerror = () => {
+              if (photoEl) photoEl.style.visibility = "visible";
+              reveal();
+            };
+            photoEl.src = "";
+            photoEl.src = photo;
+          }
+          if (text && text.trim() && textEl) textEl.textContent = text;
+          if (cloudPhoto) window.localStorage.setItem("idCardCreatorCreatorCreditPhotoV1", String(cloudPhoto));
+          if (cloudText !== null && cloudText !== undefined) {
+            window.localStorage.setItem("idCardCreatorCreatorCreditTextV1", String(cloudText));
+          }
+        } catch {
+          // ignore storage errors
+        }
+      };
+      const reveal = () => {
+        if (revealed) return;
+        revealed = true;
+        document.documentElement.classList.add("credit-ready");
+        document.documentElement.classList.remove("credit-has-local");
+        document.documentElement.classList.remove("credit-loading");
+        const credit = document.querySelector(".app-credit");
+        if (credit) credit.style.visibility = "visible";
+        if (photoEl) photoEl.style.visibility = "visible";
+      };
+      const ready = window.__idCardCloudReady || Promise.resolve();
+      ready.then(() => {
+        applyFromStorage();
+        reveal();
+      });
+      window.addEventListener("id-card-store", (evt) => {
+        const key = evt && evt.detail ? evt.detail.key : "";
+        if (key === "idCardCreatorCreatorCreditPhotoV1" || key === "idCardCreatorCreatorCreditTextV1") {
+          applyFromStorage();
+          reveal();
+        }
+      });
+    })();
+  </script>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="cloud-sync.js"></script>
@@ -418,7 +512,14 @@
     const supabaseProjectUrl = "https://pboqhiwhkqfitxvbzbxt.supabase.co";
     const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBib3FoaXdoa3FmaXR4dmJ6Ynh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwMDI4MzgsImV4cCI6MjA4NzU3ODgzOH0.H9DjOQmSop9e6O_z0uZgBNT2-WtuE4DJc4o1gFMs1do";
     const supabaseClient = window.supabase && supabaseProjectUrl && supabaseAnonKey
-      ? window.supabase.createClient(supabaseProjectUrl, supabaseAnonKey)
+      ? window.supabase.createClient(supabaseProjectUrl, supabaseAnonKey, {
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+            storage: window.localStorage
+          }
+        })
       : null;
     const cloudStore = window.idCardCloudStore;
 
@@ -435,6 +536,20 @@
     const backImage = document.getElementById("backImage");
     const creatorCreditPhoto = document.getElementById("creatorCreditPhoto");
     const creatorCreditText = document.getElementById("creatorCreditText");
+    function readCreatorCreditValue(key) {
+      const cloudValue = getStoreItem(key);
+      if (cloudValue !== null && cloudValue !== undefined && cloudValue !== "") {
+        try {
+          window.localStorage.setItem(key, String(cloudValue));
+        } catch {}
+        return cloudValue;
+      }
+      try {
+        const local = window.localStorage.getItem(key);
+        if (local !== null && local !== undefined && local !== "") return local;
+      } catch {}
+      return null;
+    }
     const previewLead = document.getElementById("previewLead");
     const defaultWatermarkSettings = {
       show: false,
@@ -678,11 +793,11 @@
 
     function loadFooterCredit() {
       try {
-        const photo = getStoreItem(creatorCreditPhotoStorageKey);
+        const photo = readCreatorCreditValue(creatorCreditPhotoStorageKey);
         if (photo && creatorCreditPhoto) creatorCreditPhoto.src = photo;
       } catch {}
       try {
-        const text = getStoreItem(creatorCreditTextStorageKey);
+        const text = readCreatorCreditValue(creatorCreditTextStorageKey);
         if (text && text.trim() && creatorCreditText) creatorCreditText.textContent = text;
       } catch {}
     }

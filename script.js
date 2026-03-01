@@ -37,6 +37,7 @@ const watermarkStorageKey = "idCardCreatorWatermarkSettingsV1";
 const previewAccessStorageKey = "idCardCreatorPreviewEnabledV1";
 const previewInfoStorageKey = "idCardCreatorPreviewInfoEnabledV1";
 const localSettingsTsKey = "idCardCreatorLocalSettingsTsV1";
+const settingsValuePrefix = "idCardCreatorSettingV1_";
 const cloudStore = window.idCardCloudStore;
 let cloudReady = !window.__idCardCloudReady;
 
@@ -119,8 +120,12 @@ const authSignatureDefaultId = "authSignatureFile";
 
 function loadDefaultFieldState() {
   try {
-    const raw = getStoreItem(defaultsStorageKey);
-    if (!raw) return;
+    const raw = readStoredOrLocalSetting(defaultsStorageKey);
+    if (!raw) {
+      defaultFieldState.selected = new Set();
+      defaultFieldState.values = {};
+      return;
+    }
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return;
 
@@ -136,13 +141,13 @@ function loadDefaultFieldState() {
 }
 
 function saveDefaultFieldState() {
-  setStoreItem(
-    defaultsStorageKey,
-    JSON.stringify({
-      selected: Array.from(defaultFieldState.selected),
-      values: defaultFieldState.values
-    })
-  );
+  const payload = JSON.stringify({
+    selected: Array.from(defaultFieldState.selected),
+    values: defaultFieldState.values
+  });
+  setStoreItem(defaultsStorageKey, payload);
+  writeLocalSetting(defaultsStorageKey, payload);
+  markLocalSettingUpdated(defaultsStorageKey);
 }
 
 function saveLogoDefaultFromFile(file) {
@@ -371,13 +376,19 @@ function writeWatermarkSettingsToInputs() {
 }
 
 function saveWatermarkSettings() {
-  setStoreItem(watermarkStorageKey, JSON.stringify(watermarkSettings));
+  const payload = JSON.stringify(watermarkSettings);
+  setStoreItem(watermarkStorageKey, payload);
+  writeLocalSetting(watermarkStorageKey, payload);
+  markLocalSettingUpdated(watermarkStorageKey);
 }
 
 function loadWatermarkSettings() {
   try {
-    const raw = getStoreItem(watermarkStorageKey);
-    if (!raw) return;
+    const raw = readStoredOrLocalSetting(watermarkStorageKey);
+    if (!raw) {
+      watermarkSettings = { ...defaultWatermarkSettings };
+      return;
+    }
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return;
     watermarkSettings = {
@@ -401,7 +412,9 @@ function loadPreviewAccessSetting() {
   const cloudValue = getStoreItem(previewAccessStorageKey);
   const localValue = readLocalSetting(previewAccessStorageKey);
   const localTs = localSettingsTs[previewAccessStorageKey] || 0;
-  const useLocal = localValue !== null && Date.now() - localTs < 10 * 60 * 1000;
+  const hasCloud = cloudValue !== null && cloudValue !== undefined;
+  const hasLocal = localValue !== null && localValue !== undefined;
+  const useLocal = (hasLocal && Date.now() - localTs < 10 * 60 * 1000) || !hasCloud;
   previewAccessEnabled = parseStoredBool(useLocal ? localValue : cloudValue, true);
   if (previewAccessToggle) previewAccessToggle.checked = previewAccessEnabled;
   setPreviewAccessLocalCache(previewAccessEnabled ? "true" : "false");
@@ -410,21 +423,37 @@ function loadPreviewAccessSetting() {
 function savePreviewAccessSetting() {
   setStoreItem(previewAccessStorageKey, previewAccessEnabled ? "true" : "false");
   setPreviewAccessLocalCache(previewAccessEnabled ? "true" : "false");
-  upsertAppSetting(previewAccessStorageKey, previewAccessEnabled ? "true" : "false");
+  upsertAppSetting(previewAccessStorageKey, previewAccessEnabled ? "true" : "false")
+    .then((ok) => {
+      if (ok) return;
+      setStatus("Preview link setting could not save to cloud.", true);
+    })
+    .catch(() => {
+      setStatus("Preview link setting could not save to cloud.", true);
+    });
 }
 
 function loadPreviewInfoSetting() {
   const cloudValue = getStoreItem(previewInfoStorageKey);
   const localValue = readLocalSetting(previewInfoStorageKey);
   const localTs = localSettingsTs[previewInfoStorageKey] || 0;
-  const useLocal = localValue !== null && Date.now() - localTs < 10 * 60 * 1000;
+  const hasCloud = cloudValue !== null && cloudValue !== undefined;
+  const hasLocal = localValue !== null && localValue !== undefined;
+  const useLocal = (hasLocal && Date.now() - localTs < 10 * 60 * 1000) || !hasCloud;
   previewInfoEnabled = parseStoredBool(useLocal ? localValue : cloudValue, true);
   if (previewInfoToggle) previewInfoToggle.checked = previewInfoEnabled;
 }
 
 function savePreviewInfoSetting() {
   setStoreItem(previewInfoStorageKey, previewInfoEnabled ? "true" : "false");
-  upsertAppSetting(previewInfoStorageKey, previewInfoEnabled ? "true" : "false");
+  upsertAppSetting(previewInfoStorageKey, previewInfoEnabled ? "true" : "false")
+    .then((ok) => {
+      if (ok) return;
+      setStatus("Preview info setting could not save to cloud.", true);
+    })
+    .catch(() => {
+      setStatus("Preview info setting could not save to cloud.", true);
+    });
 }
 
 function buildWatermarkMarkup(text, rows, cols) {
@@ -2309,7 +2338,14 @@ const supabaseAnonKey =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBib3FoaXdoa3FmaXR4dmJ6Ynh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwMDI4MzgsImV4cCI6MjA4NzU3ODgzOH0.H9DjOQmSop9e6O_z0uZgBNT2-WtuE4DJc4o1gFMs1do";
 const supabaseClient =
   window.supabase && supabaseProjectUrl && supabaseAnonKey
-    ? window.supabase.createClient(supabaseProjectUrl, supabaseAnonKey)
+    ? window.supabase.createClient(supabaseProjectUrl, supabaseAnonKey, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+          storage: window.localStorage
+        }
+      })
     : null;
 const authChannel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("idcard-auth") : null;
 async function getAuthSession() {
@@ -2324,14 +2360,15 @@ async function getAuthSession() {
 }
 
 async function upsertAppSetting(key, value) {
-  if (!supabaseClient) return;
+  if (!supabaseClient) return false;
   try {
     const { error } = await supabaseClient
       .from("app_settings")
       .upsert({ key: String(key), value: String(value) }, { onConflict: "key" });
     if (error) throw error;
+    return true;
   } catch {
-    // ignore write errors; cloud sync will retry
+    return false;
   }
 }
 
@@ -2415,6 +2452,138 @@ let cardZoomHideTimer = null;
 let entryGateCheckInProgress = false;
 let settingsFlushTimer = null;
 const localSettingsTs = {};
+let settingsHydrating = false;
+
+const settingsPersistExcludeIds = new Set([
+  "adminUsername",
+  "adminPassword",
+  "entryLoginUsername",
+  "entryLoginPassword",
+  "superAdminCurrentPassword",
+  "superAdminNewUsername",
+  "superAdminNewPassword",
+  "superAdminConfirmPassword",
+  "adminAccountCurrentSuperPassword",
+  "adminAccountNewUsername",
+  "adminAccountNewPassword",
+  "adminAccountConfirmPassword",
+  "creatorTrademarkUsername",
+  "creatorTrademarkPassword",
+  "creatorCreditTextInput",
+  "creatorCreditPhotoFile",
+  "photoFile",
+  "logoFile",
+  "signatureFile",
+  "authSignatureFile",
+  "frontThemeFile",
+  "backThemeFile",
+  "companyNameImageFile",
+  "previewAccessToggle",
+  "previewInfoToggle",
+  "showWatermark",
+  "watermarkText",
+  "watermarkLayer",
+  "watermarkRows",
+  "watermarkCols",
+  "watermarkOpacity",
+  "watermarkColor",
+  "watermarkSize",
+  "watermarkRotate"
+]);
+
+function getSettingsStorageKeyForElement(el) {
+  if (!el || !el.id) return "";
+  return `${settingsValuePrefix}${el.id}`;
+}
+
+function isPersistableSettingElement(el) {
+  if (!el || !el.id) return false;
+  if (settingsPersistExcludeIds.has(el.id)) return false;
+  if (el.type === "file") return false;
+  if (el.id.endsWith("Default")) return false;
+  return true;
+}
+
+function readElementValue(el) {
+  if (!el) return "";
+  if (el.type === "checkbox") return el.checked ? "true" : "false";
+  if (el.type === "radio") return el.checked ? el.value : "";
+  return el.value ?? "";
+}
+
+function writeElementValue(el, value) {
+  if (!el) return false;
+  if (el.type === "checkbox") {
+    const next = parseStoredBool(value, el.checked);
+    if (el.checked !== next) el.checked = next;
+    return true;
+  }
+  if (el.type === "radio") {
+    if (!value) return false;
+    const group = el.name
+      ? document.querySelectorAll(`input[type="radio"][name="${CSS.escape(el.name)}"]`)
+      : [el];
+    let changed = false;
+    group.forEach((radio) => {
+      if (radio.value === value) {
+        radio.checked = true;
+        changed = true;
+      }
+    });
+    return changed;
+  }
+  if (typeof value === "string" && el.value !== value) {
+    el.value = value;
+    return true;
+  }
+  return false;
+}
+
+function persistSettingElement(el) {
+  const key = getSettingsStorageKeyForElement(el);
+  if (!key) return;
+  const value = readElementValue(el);
+  if (value === "") {
+    setStoreItem(key, "");
+    writeLocalSetting(key, "");
+  } else {
+    setStoreItem(key, value);
+    writeLocalSetting(key, value);
+  }
+  markLocalSettingUpdated(key);
+}
+
+function applyPersistedSettings(scope) {
+  const root = scope || document;
+  const inputs = Array.from(root.querySelectorAll("input, select, textarea"));
+  settingsHydrating = true;
+  inputs.forEach((el) => {
+    if (!isPersistableSettingElement(el)) return;
+    const key = getSettingsStorageKeyForElement(el);
+    const stored = readStoredOrLocalSetting(key);
+    if (stored === null || stored === undefined) return;
+    const changed = writeElementValue(el, stored);
+    if (changed) {
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  });
+  settingsHydrating = false;
+}
+
+function bindSettingPersistence(scope) {
+  const root = scope || document;
+  const inputs = Array.from(root.querySelectorAll("input, select, textarea"));
+  inputs.forEach((el) => {
+    if (!isPersistableSettingElement(el)) return;
+    const handler = () => {
+      if (settingsHydrating) return;
+      persistSettingElement(el);
+    };
+    el.addEventListener("input", handler);
+    el.addEventListener("change", handler);
+  });
+}
 
 function scheduleSettingsFlush() {
   if (!cloudStore || typeof cloudStore.flush !== "function") return;
@@ -2471,6 +2640,16 @@ function writeLocalSetting(key, value) {
   }
 }
 
+function readStoredOrLocalSetting(key) {
+  const localValue = readLocalSetting(key);
+  const localTs = localSettingsTs[key] || 0;
+  const useLocal = localValue !== null && localValue !== undefined && Date.now() - localTs < 10 * 60 * 1000;
+  if (useLocal) return localValue;
+  const cloudValue = getStoreItem(key);
+  if (cloudValue !== null && cloudValue !== undefined) return cloudValue;
+  return localValue;
+}
+
 function persistEntryLoginSession(source = "entry") {
   removeStoreItem(logoutTsStorageKey);
   setStoreItem(
@@ -2495,12 +2674,7 @@ function clearApprovedIdsNavContext() {
 
 function loadEntryLoginSession() {
   try {
-    const logoutRaw = getStoreItem(logoutTsStorageKey);
-    const logoutTs = Number(logoutRaw || 0);
-    if (logoutTs && Date.now() - logoutTs < 60000) {
-      clearEntryLoginSession();
-      return;
-    }
+    // no logout cooldown guard; session persists
     const raw = getStoreItem(entryLoginSessionStorageKey);
     let parsed = raw ? JSON.parse(raw) : null;
     if (!parsed || typeof parsed !== "object" || !parsed.signedIn) {
@@ -2527,19 +2701,6 @@ function loadEntryLoginSession() {
 }
 
 async function refreshAuthState() {
-  try {
-    const logoutRaw = getStoreItem(logoutTsStorageKey);
-    const logoutTs = Number(logoutRaw || 0);
-    if (logoutTs && Date.now() - logoutTs < 60000) {
-      appSignedIn = false;
-      appSignedInRole = "admin";
-      adminUnlocked = false;
-      clearEntryLoginSession();
-      return false;
-    }
-  } catch {
-    // ignore logout guard errors
-  }
   const session = await getAuthSession();
   if (!session) {
     appSignedIn = false;
@@ -2672,12 +2833,11 @@ function canManageInterfaceTheme() {
 
 function loadInterfaceTheme() {
   try {
-    const saved = getStoreItem(interfaceThemeStorageKey);
+    const saved = readStoredOrLocalSetting(interfaceThemeStorageKey);
     if (saved === "dark" || saved === "light") {
       isDarkMode = saved === "dark";
     } else {
       isDarkMode = true;
-      setStoreItem(interfaceThemeStorageKey, "dark");
     }
   } catch {
     isDarkMode = true;
@@ -2692,7 +2852,10 @@ function toggleInterfaceTheme() {
   }
   isDarkMode = !isDarkMode;
   applyInterfaceTheme();
-  setStoreItem(interfaceThemeStorageKey, isDarkMode ? "dark" : "light");
+  const nextValue = isDarkMode ? "dark" : "light";
+  setStoreItem(interfaceThemeStorageKey, nextValue);
+  writeLocalSetting(interfaceThemeStorageKey, nextValue);
+  markLocalSettingUpdated(interfaceThemeStorageKey);
 }
 
 function loadSuperAdminCredentials() {
@@ -2832,6 +2995,7 @@ function applyAdminAccessState() {
     "address",
     "telephone"
   ]);
+  appSignedInRole = adminUnlocked ? "superadmin" : "admin";
   getSetupManagedControls().forEach((el) => {
     if (!el || !el.id) return;
     if (el.id.endsWith("Default")) {
@@ -2872,31 +3036,12 @@ function applyAdminAccessState() {
 }
 
 function openAdminLoginModal() {
-  getAuthSession()
-    .then((session) => {
-      if (session) {
-        adminUnlocked = true;
-        adminLastActivityTs = Date.now();
-        persistEntryLoginSession("unlock");
-        applyAdminAccessState();
-        setStatus("Settings unlocked.");
-        return;
-      }
-      if (!adminLoginModal) return;
-      adminLoginModal.hidden = false;
-      if (adminLoginErrorEl) adminLoginErrorEl.hidden = true;
-      if (adminUsernameInput) adminUsernameInput.value = "";
-      if (adminPasswordInput) adminPasswordInput.value = "";
-      if (adminUsernameInput) adminUsernameInput.focus();
-    })
-    .catch(() => {
-      if (!adminLoginModal) return;
-      adminLoginModal.hidden = false;
-      if (adminLoginErrorEl) adminLoginErrorEl.hidden = true;
-      if (adminUsernameInput) adminUsernameInput.value = "";
-      if (adminPasswordInput) adminPasswordInput.value = "";
-      if (adminUsernameInput) adminUsernameInput.focus();
-    });
+  if (!adminLoginModal) return;
+  adminLoginModal.hidden = false;
+  if (adminLoginErrorEl) adminLoginErrorEl.hidden = true;
+  if (adminUsernameInput) adminUsernameInput.value = "";
+  if (adminPasswordInput) adminPasswordInput.value = "";
+  if (adminUsernameInput) adminUsernameInput.focus();
 }
 
 function closeAdminLoginModal() {
@@ -3014,7 +3159,7 @@ async function logoutEntrySession() {
   appSignedIn = false;
   appSignedInRole = "admin";
   adminUnlocked = false;
-  setStoreItem(logoutTsStorageKey, String(Date.now()));
+  // no logout cooldown guard
   clearEntryLoginSession();
   clearApprovedIdsNavContext();
   applyAdminAccessState();
@@ -3995,6 +4140,10 @@ updateAllCardContrastModes();
 loadSuperAdminCredentials();
 loadAdminCredentials();
 loadLocalSettingsTs();
+if (adminSettingsPanel) {
+  applyPersistedSettings(adminSettingsPanel);
+  bindSettingPersistence(adminSettingsPanel);
+}
 loadInterfaceTheme();
 applyAdminAccessState();
 if (cloudReady) {
@@ -4011,6 +4160,7 @@ if (entryLoginSubmitBtn) entryLoginSubmitBtn.addEventListener("click", submitEnt
 if (adminSettingsPanel) {
   ["input", "change"].forEach((evtName) => {
     adminSettingsPanel.addEventListener(evtName, () => {
+      if (settingsHydrating) return;
       if (!adminUnlocked) return;
       scheduleSettingsFlush();
     });
@@ -4099,14 +4249,16 @@ function saveCreatorTrademarkChanges() {
   if (creatorTrademarkErrorEl) creatorTrademarkErrorEl.hidden = true;
   if (creatorCreditText && creatorCreditTextInput) {
     const text = (creatorCreditTextInput.value || "").trim();
-    if (text) {
-      creatorCreditText.textContent = text;
-      setStoreItem(creatorCreditTextStorageKey, text);
-    }
+    creatorCreditText.textContent = text || " ";
+    setStoreItem(creatorCreditTextStorageKey, text);
+    writeLocalSetting(creatorCreditTextStorageKey, text);
+    markLocalSettingUpdated(creatorCreditTextStorageKey);
   }
   if (pendingCreatorPhotoDataUrl && creatorCreditPhoto) {
     creatorCreditPhoto.src = pendingCreatorPhotoDataUrl;
     setStoreItem(creatorCreditPhotoStorageKey, pendingCreatorPhotoDataUrl);
+    writeLocalSetting(creatorCreditPhotoStorageKey, pendingCreatorPhotoDataUrl);
+    markLocalSettingUpdated(creatorCreditPhotoStorageKey);
   }
 
   closeCreatorTrademarkModal();
@@ -4170,15 +4322,36 @@ document.addEventListener("keydown", (evt) => {
 function handleStoreChange(evt) {
   const key = evt && evt.detail ? evt.detail.key : "";
   if (key === interfaceThemeStorageKey) loadInterfaceTheme();
+  if (key && key.startsWith(settingsValuePrefix)) {
+    const ts = localSettingsTs[key] || 0;
+    if (Date.now() - ts < 10 * 60 * 1000) return;
+    const elId = key.replace(settingsValuePrefix, "");
+    const el = elId ? document.getElementById(elId) : null;
+    if (el && isPersistableSettingElement(el)) {
+      const stored = readStoredOrLocalSetting(key);
+      if (stored === null || stored === undefined) return;
+      settingsHydrating = true;
+      const changed = writeElementValue(el, stored);
+      settingsHydrating = false;
+      if (changed) {
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    }
+  }
   if (key === watermarkStorageKey) {
     loadWatermarkSettings();
     writeWatermarkSettingsToInputs();
     renderWatermark();
   }
   if (key === previewAccessStorageKey) {
+    const ts = localSettingsTs[previewAccessStorageKey] || 0;
+    if (Date.now() - ts < 10 * 60 * 1000) return;
     loadPreviewAccessSetting();
   }
   if (key === previewInfoStorageKey) {
+    const ts = localSettingsTs[previewInfoStorageKey] || 0;
+    if (Date.now() - ts < 10 * 60 * 1000) return;
     loadPreviewInfoSetting();
   }
   if (key === defaultsStorageKey) {
@@ -4188,6 +4361,14 @@ function handleStoreChange(evt) {
   }
   if (key === currentLogoStorageKey) syncEntryLoginLogo();
   if (key === creatorCreditPhotoStorageKey || key === creatorCreditTextStorageKey) {
+    const ts = localSettingsTs[key] || 0;
+    if (Date.now() - ts < 10 * 60 * 1000) return;
+    const localOverride = readLocalSetting(key);
+    if (localOverride !== null && localOverride !== undefined && localOverride !== "") {
+      if (creatorCreditPhoto && key === creatorCreditPhotoStorageKey) creatorCreditPhoto.src = localOverride;
+      if (creatorCreditText && key === creatorCreditTextStorageKey) creatorCreditText.textContent = localOverride;
+      return;
+    }
     if (creatorCreditPhoto && key === creatorCreditPhotoStorageKey) {
       const savedPhoto = getStoreItem(creatorCreditPhotoStorageKey);
       if (savedPhoto) creatorCreditPhoto.src = savedPhoto;
@@ -4195,6 +4376,15 @@ function handleStoreChange(evt) {
     if (creatorCreditText && key === creatorCreditTextStorageKey) {
       const savedText = getStoreItem(creatorCreditTextStorageKey);
       if (savedText && savedText.trim()) creatorCreditText.textContent = savedText;
+    }
+    if (evt && evt.detail) {
+      const nextValue = evt.detail.newValue;
+      if (nextValue === null || nextValue === undefined) {
+        writeLocalSetting(key, null);
+      } else {
+        writeLocalSetting(key, String(nextValue));
+      }
+      markLocalSettingUpdated(key);
     }
   }
 }
@@ -4264,6 +4454,9 @@ if (window.__idCardCloudReady) {
     loadInterfaceTheme();
     loadSuperAdminCredentials();
     loadAdminCredentials();
+    if (adminSettingsPanel) {
+      applyPersistedSettings(adminSettingsPanel);
+    }
     refreshAuthState().finally(() => {
       applyAdminAccessState();
       applyEntryGateState();

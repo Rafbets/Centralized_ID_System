@@ -488,30 +488,18 @@ body.theme-dark .status-overlay-text {
   display: grid;
   gap: 6px;
   margin-bottom: 10px;
-  padding: 8px;
-  border: 1px solid #d0dbef;
-  border-radius: 8px;
-  background: #f7f9ff;
 }
 
 .profile-tools {
   display: grid;
   gap: 6px;
   margin-bottom: 10px;
-  padding: 8px;
-  border: 1px solid #d0dbef;
-  border-radius: 8px;
-  background: #f7f9ff;
 }
 
 .company-tools {
   display: grid;
   gap: 6px;
   margin-bottom: 10px;
-  padding: 8px;
-  border: 1px solid #d0dbef;
-  border-radius: 8px;
-  background: #f7f9ff;
 }
 
 .signature-pad-wrap[hidden] {
@@ -611,8 +599,9 @@ body.theme-dark .status-overlay-text {
   gap: 4px;
   padding: 6px;
   border-radius: 7px;
-  background: #162456;
-  color: #d8e1ff;
+  background: #f2f6ff;
+  color: #2b3f66;
+  border: 1px solid rgba(138, 160, 206, 0.35);
 }
 
 .profile-adjust-grid[hidden] {
@@ -625,6 +614,16 @@ body.theme-dark .status-overlay-text {
   gap: 6px;
   align-items: center;
   font-size: 0.74rem;
+  color: #2f4166;
+}
+
+body.theme-dark .profile-adjust-grid {
+  background: #162456;
+  color: #d8e1ff;
+  border-color: rgba(120, 146, 198, 0.35);
+}
+
+body.theme-dark .profile-adjust-grid label {
   color: #d8e1ff;
 }
 
@@ -1699,9 +1698,9 @@ textarea:focus {
 .form-panel .upload-grid,
 .form-panel .admin-settings-panel,
 .form-panel .theme-tools,
-.form-panel .company-tools,
-.form-panel .profile-tools,
-.form-panel .signature-tools,
+.form-panel .company-tools:not(.control-box),
+.form-panel .profile-tools:not(.control-box),
+.form-panel .signature-tools:not(.control-box),
 .form-panel .super-admin-tools {
   border-radius: 10px;
   border-color: #c2d2f2;
@@ -1766,6 +1765,45 @@ textarea:focus {
   font-weight: 700;
 }
 
+.control-box {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(116, 128, 150, 0.35);
+  background:
+    radial-gradient(circle at 12% 12%, rgba(255, 255, 255, 0.65), transparent 45%),
+    radial-gradient(circle at 92% 8%, rgba(200, 206, 219, 0.35), transparent 40%),
+    linear-gradient(160deg, rgba(248, 249, 252, 0.98), rgba(227, 231, 238, 0.92));
+  box-shadow:
+    0 22px 40px rgba(24, 32, 46, 0.16),
+    0 4px 10px rgba(85, 96, 120, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.control-box-title {
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #22345c;
+}
+
+body.theme-dark .control-box {
+  border-color: rgba(120, 155, 230, 0.3);
+  background:
+    radial-gradient(circle at 12% 12%, rgba(96, 140, 255, 0.18), transparent 48%),
+    linear-gradient(160deg, rgba(24, 30, 44, 0.94), rgba(18, 22, 33, 0.92));
+  box-shadow:
+    0 18px 36px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+body.theme-dark .control-box-title {
+  color: #cfe0ff;
+}
+
+
 .watermark-toggle input[type="checkbox"] {
   width: auto;
   margin: 0;
@@ -1773,10 +1811,10 @@ textarea:focus {
 
 .credits-box {
   padding: 8px 12px;
-  border: 1px solid var(--fb-line, #d8dbe1);
+  border: 0;
   border-radius: 999px;
-  background: var(--fb-card-soft, #f7f8fa);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.14);
+  background: transparent;
+  box-shadow: none;
 }
 
 .footer-credit-text {
@@ -1785,6 +1823,7 @@ textarea:focus {
   font-weight: 700;
   color: var(--fb-text, #1c1e21);
   text-align: center;
+  font-family: "Roboto Condensed", "Segoe UI", Arial, sans-serif;
 }
 
 .app-credit {
@@ -1799,12 +1838,31 @@ textarea:focus {
   max-width: calc(100vw - 24px);
 }
 
+.credit-loading .app-credit,
+.credit-has-local .app-credit {
+  visibility: hidden;
+}
+
+.credit-ready .app-credit {
+  visibility: visible;
+}
+
+.app-credit img {
+  visibility: inherit;
+}
+
 .creator-credit-photo {
   width: 26px;
   height: 26px;
   border-radius: 50%;
   object-fit: cover;
   border: 1px solid rgba(24, 119, 242, 0.45);
+}
+
+body.theme-dark .credits-box {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
 .credit-photo-set {
@@ -1884,9 +1942,9 @@ body {
 .form-panel .status,
 .form-panel .admin-settings-panel,
 .form-panel .theme-tools,
-.form-panel .company-tools,
-.form-panel .profile-tools,
-.form-panel .signature-tools,
+.form-panel .company-tools:not(.control-box),
+.form-panel .profile-tools:not(.control-box),
+.form-panel .signature-tools:not(.control-box),
 .form-panel .super-admin-tools,
 .form-panel .photo-upload {
   background: var(--fb-card-soft);

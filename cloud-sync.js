@@ -18,7 +18,16 @@
   }
 
   const hasSupabase = !!(window.supabase && PROJECT_URL && ANON_KEY);
-  const supabaseClient = hasSupabase ? window.supabase.createClient(PROJECT_URL, ANON_KEY) : null;
+  const supabaseClient = hasSupabase
+    ? window.supabase.createClient(PROJECT_URL, ANON_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+          storage: window.localStorage
+        }
+      })
+    : null;
 
   const cache = new Map();
   const pendingUpserts = new Map();

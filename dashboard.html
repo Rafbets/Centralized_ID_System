@@ -4,6 +4,18 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ID Card Dashboard</title>
+  <script>
+    (function () {
+      document.documentElement.classList.add("credit-loading");
+      try {
+        const hasPhoto = !!window.localStorage.getItem("idCardCreatorCreatorCreditPhotoV1");
+        const hasText = !!window.localStorage.getItem("idCardCreatorCreatorCreditTextV1");
+        if (hasPhoto || hasText) document.documentElement.classList.add("credit-has-local");
+      } catch {
+        // ignore storage errors
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="styles.css" />
   <style>
     body.app-loading .app,
@@ -69,7 +81,21 @@
     }
   </style>
 </head>
-<body class="theme-dark app-loading">
+<body class="app-loading">
+  <script>
+    (function () {
+      try {
+        const saved = window.localStorage.getItem("idCardCreatorInterfaceThemeV1");
+        if (saved === "dark") {
+          document.body.classList.add("theme-dark");
+        } else {
+          document.body.classList.remove("theme-dark");
+        }
+      } catch {
+        document.body.classList.remove("theme-dark");
+      }
+    })();
+  </script>
   <div id="appLoadingOverlay" class="app-loading-overlay" aria-live="polite" aria-busy="true">
     <div class="app-loading-card">
       <div>Loading admin interface…</div>
@@ -98,23 +124,27 @@
           <p>Admin sign-in is now managed by Supabase Auth. Use the Supabase dashboard to create or reset the shared admin user.</p>
         </div>
         <div class="upload-grid">
-          <div class="photo-upload">
-            <label for="logoFile" class="upload-btn">Choose Company Logo</label>
-            <label class="upload-default-toggle" for="logoFileDefault">
-              <input id="logoFileDefault" type="checkbox" />
-              Default
-            </label>
-            <input id="logoFile" type="file" accept="image/*" />
-          </div>
-          <button id="logoAdjustToggle" type="button" class="company-adjust-toggle">Adjust Logo</button>
-          <div id="logoAdjustPanel" class="company-adjust-grid" hidden>
-            <label>Logo X <input id="logoX" type="range" min="-120" max="120" value="0" /></label>
-            <label>Logo Y <input id="logoY" type="range" min="-80" max="80" value="0" /></label>
-            <label>Scale <input id="logoScale" type="range" min="60" max="220" value="100" /></label>
+          <div class="control-box">
+            <div class="control-box-title">Company Logo Control</div>
+            <div class="photo-upload">
+              <label for="logoFile" class="upload-btn">Choose Company Logo</label>
+              <label class="upload-default-toggle" for="logoFileDefault">
+                <input id="logoFileDefault" type="checkbox" />
+                Default
+              </label>
+              <input id="logoFile" type="file" accept="image/*" />
+            </div>
+            <button id="logoAdjustToggle" type="button" class="company-adjust-toggle">Adjust Logo</button>
+            <div id="logoAdjustPanel" class="company-adjust-grid" hidden>
+              <label>Logo X <input id="logoX" type="range" min="-120" max="120" value="0" /></label>
+              <label>Logo Y <input id="logoY" type="range" min="-80" max="80" value="0" /></label>
+              <label>Scale <input id="logoScale" type="range" min="60" max="220" value="100" /></label>
+            </div>
           </div>
         </div>
         <div class="admin-settings-grid">
-          <div class="theme-tools">
+          <div class="control-box theme-tools">
+            <div class="control-box-title">Front Theme Control</div>
             <label>Front Theme Source
               <select id="frontThemeSource">
                 <option value="builtin">Built-in Theme</option>
@@ -138,7 +168,8 @@
               <input id="frontThemeFile" type="file" accept="image/*" />
             </div>
           </div>
-          <div class="theme-tools">
+          <div class="control-box theme-tools">
+            <div class="control-box-title">Back Theme Control</div>
             <label>Back Theme Source
               <select id="backThemeSource">
                 <option value="builtin">Built-in Theme</option>
@@ -162,7 +193,8 @@
               <input id="backThemeFile" type="file" accept="image/*" />
             </div>
           </div>
-          <div class="company-tools">
+          <div class="control-box company-tools">
+            <div class="control-box-title">Company Name Control</div>
             <label>Main Company Name<input id="companyMainName" placeholder="Enter main company name" /></label>
             <label>Sub Company Name<input id="companySubName" placeholder="Enter sub company name" /></label>
             <label>Company Display
@@ -196,7 +228,8 @@
               <label>Sub Font <input id="companySubFont" type="range" min="14" max="36" value="24" /></label>
             </div>
           </div>
-          <div class="profile-tools">
+          <div class="control-box profile-tools">
+            <div class="control-box-title">Profile Frame Control</div>
             <label>Profile Frame
               <select id="profileFrameShape">
                 <option value="circle">Circle</option>
@@ -209,10 +242,11 @@
               <label>Frame <input id="profileFrameSize" type="range" min="120" max="220" value="178" /></label>
             </div>
           </div>
-          <label>Employee Signature Color
-            <input id="signatureColor" type="color" value="#111111" />
-          </label>
-          <div class="signature-tools auth-signature-tools">
+          <div class="control-box signature-tools auth-signature-tools">
+            <div class="control-box-title">ID Information Control</div>
+            <label>Employee Signature Color
+              <input id="signatureColor" type="color" value="#111111" />
+            </label>
             <label>Authorized Signature Input
               <select id="authSignatureMode">
                 <option value="upload">Upload Photo</option>
@@ -236,66 +270,76 @@
               <label>Y <input id="authSignatureY" type="range" min="-40" max="40" value="0" /></label>
               <label>Scale <input id="authSignatureScale" type="range" min="65" max="180" value="100" /></label>
             </div>
-          <div id="authSignaturePadWrap" class="signature-pad-wrap" hidden>
-            <canvas id="authSignaturePad" class="signature-pad-canvas" width="520" height="180" aria-label="Authorized signature drawing pad"></canvas>
-            <div class="signature-pad-actions">
-              <button id="clearAuthSignaturePad" type="button">Clear Pad</button>
-              <button id="useAuthPadSignature" type="button">Use Drawn Signature</button>
+            <div id="authSignaturePadWrap" class="signature-pad-wrap" hidden>
+              <canvas id="authSignaturePad" class="signature-pad-canvas" width="520" height="180" aria-label="Authorized signature drawing pad"></canvas>
+              <div class="signature-pad-actions">
+                <button id="clearAuthSignaturePad" type="button">Clear Pad</button>
+                <button id="useAuthPadSignature" type="button">Use Drawn Signature</button>
+              </div>
             </div>
-          </div>
-          </div>
-          <label>Authorized Signatory<input id="signatory" placeholder="Enter signatory name" /></label>
-          <label>Signatory Title<input id="signatoryTitle" placeholder="Enter signatory title" /></label>
-          <label>Address<input id="address" placeholder="Enter office address" /></label>
-          <label>Telephone<input id="telephone" placeholder="Enter office telephone" /></label>
-          <label>Card Notice
-            <textarea id="noticeText" rows="4">This card is non-transferable Always carry
+            <label>Authorized Signatory<input id="signatory" placeholder="Enter signatory name" /></label>
+            <label>Signatory Title<input id="signatoryTitle" placeholder="Enter signatory title" /></label>
+            <label>Address<input id="address" placeholder="Enter office address" /></label>
+            <label>Telephone<input id="telephone" placeholder="Enter office telephone" /></label>
+            <label>Card Notice
+              <textarea id="noticeText" rows="4">This card is non-transferable Always carry
 you card during office hours.
 in case of loss, inform issuing authority.
 If found, please call our main office</textarea>
-          </label>
-          <button id="watermarkAdjustToggle" type="button" class="company-adjust-toggle">Adjust Watermark</button>
-          <div id="watermarkAdjustPanel" class="watermark-tools" hidden>
-            <label class="watermark-toggle">
-              <input id="showWatermark" type="checkbox" />
-              Show Watermark
             </label>
-            <label>Watermark Text<input id="watermarkText" placeholder="Enter watermark text" /></label>
-            <label>Layer
-              <select id="watermarkLayer">
-                <option value="over">Over Content</option>
-                <option value="under">Under Content</option>
-              </select>
-            </label>
-            <label>Rows <input id="watermarkRows" type="range" min="1" max="8" value="4" /></label>
-            <label>Columns <input id="watermarkCols" type="range" min="1" max="6" value="3" /></label>
-            <label>Opacity <input id="watermarkOpacity" type="range" min="6" max="45" value="18" /></label>
-            <label>Color <input id="watermarkColor" type="color" value="#ffffff" /></label>
-            <label>Size <input id="watermarkSize" type="range" min="14" max="56" value="28" /></label>
-            <label>Rotation <input id="watermarkRotate" type="range" min="-60" max="60" value="-27" /></label>
           </div>
-          <label class="watermark-toggle">
-            <input id="showQrCode" type="checkbox" checked />
-            Show QR Code
-          </label>
-          <label class="watermark-toggle">
-            <input id="previewAccessToggle" type="checkbox" checked />
-            Enable ID Preview Link
-          </label>
-          <label class="watermark-toggle">
-            <input id="previewInfoToggle" type="checkbox" checked />
-            Show Preview Information
-          </label>
-          <button id="qrAdjustToggle" type="button" class="company-adjust-toggle">Adjust QR</button>
-          <div id="qrAdjustPanel" class="company-adjust-grid" hidden>
-            <label>QR X <input id="qrX" type="range" min="-120" max="120" value="0" /></label>
-            <label>QR Y <input id="qrY" type="range" min="-120" max="120" value="0" /></label>
+          <div class="control-box">
+            <div class="control-box-title">Watermark Control</div>
+            <button id="watermarkAdjustToggle" type="button" class="company-adjust-toggle">Adjust Watermark</button>
+            <div id="watermarkAdjustPanel" class="watermark-tools" hidden>
+              <label class="watermark-toggle">
+                <input id="showWatermark" type="checkbox" />
+                Show Watermark
+              </label>
+              <label>Watermark Text<input id="watermarkText" placeholder="Enter watermark text" /></label>
+              <label>Layer
+                <select id="watermarkLayer">
+                  <option value="over">Over Content</option>
+                  <option value="under">Under Content</option>
+                </select>
+              </label>
+              <label>Rows <input id="watermarkRows" type="range" min="1" max="8" value="4" /></label>
+              <label>Columns <input id="watermarkCols" type="range" min="1" max="6" value="3" /></label>
+              <label>Opacity <input id="watermarkOpacity" type="range" min="6" max="45" value="18" /></label>
+              <label>Color <input id="watermarkColor" type="color" value="#ffffff" /></label>
+              <label>Size <input id="watermarkSize" type="range" min="14" max="56" value="28" /></label>
+              <label>Rotation <input id="watermarkRotate" type="range" min="-60" max="60" value="-27" /></label>
+            </div>
+          </div>
+          <div class="control-box">
+            <div class="control-box-title">ID QR Code Control</div>
+            <label class="watermark-toggle">
+              <input id="showQrCode" type="checkbox" checked />
+              Show QR Code
+            </label>
+            <button id="qrAdjustToggle" type="button" class="company-adjust-toggle">Adjust QR</button>
+            <div id="qrAdjustPanel" class="company-adjust-grid" hidden>
+              <label>QR X <input id="qrX" type="range" min="-120" max="120" value="0" /></label>
+              <label>QR Y <input id="qrY" type="range" min="-120" max="120" value="0" /></label>
+            </div>
+          </div>
+          <div class="control-box">
+            <div class="control-box-title">ID Preview Control</div>
+            <label class="watermark-toggle">
+              <input id="previewAccessToggle" type="checkbox" checked />
+              Enable ID Preview
+            </label>
+            <label class="watermark-toggle">
+              <input id="previewInfoToggle" type="checkbox" checked />
+              Show Preview Information
+            </label>
           </div>
         </div>
       </section>
 
       <div id="userSettingsPanel" class="form-grid user-form-grid">
-        <div class="profile-tools">
+        <div class="control-box profile-tools">
+          <div class="control-box-title">Profile Photo Control</div>
           <div class="photo-upload">
             <label for="photoFile" class="upload-btn">Choose Profile Photo</label>
             <input id="photoFile" type="file" accept="image/*" />
@@ -307,7 +351,8 @@ If found, please call our main office</textarea>
             <label>Scale <input id="profileScale" type="range" min="45" max="190" value="100" /></label>
           </div>
         </div>
-        <div class="signature-tools">
+        <div class="control-box signature-tools">
+          <div class="control-box-title">Signature Control</div>
           <label>Signature Input
             <select id="signatureMode">
               <option value="upload">Upload Photo</option>
@@ -332,18 +377,21 @@ If found, please call our main office</textarea>
             </div>
           </div>
         </div>
-        <label>Employee Name<input id="employeeName" placeholder="Enter employee name" /></label>
-        <label>Position<input id="position" placeholder="Enter position" /></label>
-        <label>Employee No<input id="employeeNo" placeholder="Enter employee number" /></label>
-        <label>Date Hired<input id="dateHired" placeholder="MM/DD/YYYY" /></label>
-        <label>Valid Until<input id="validUntil" placeholder="MM/DD/YYYY or N/A" /></label>
-        <label>Phone No<input id="phoneNo" placeholder="Enter phone number" /></label>
-        <label>Barcode Value<input id="barcodeValue" placeholder="Custom barcode text (optional)" /></label>
-        <label>Home Address<input id="homeAddress" placeholder="Enter home address" /></label>
-        <label>Emergency Contact Person<input id="emergencyPerson" placeholder="Enter emergency contact person" /></label>
-        <label>Emergency Contact No<input id="emergencyNo" placeholder="Enter emergency contact number" /></label>
-        <label>Return Contact<input id="returnContact" placeholder="Enter return contact" /></label>
-        <label>Return Contact No<input id="returnContactNo" placeholder="Enter return contact number" /></label>
+        <div class="control-box">
+          <div class="control-box-title">Employee Information</div>
+          <label>Employee Name<input id="employeeName" placeholder="Enter employee name" /></label>
+          <label>Position<input id="position" placeholder="Enter position" /></label>
+          <label>Employee No<input id="employeeNo" placeholder="Enter employee number" /></label>
+          <label>Date Hired<input id="dateHired" placeholder="MM/DD/YYYY" /></label>
+          <label>Valid Until<input id="validUntil" placeholder="MM/DD/YYYY or N/A" /></label>
+          <label>Phone No<input id="phoneNo" placeholder="Enter phone number" /></label>
+          <label>Barcode Value<input id="barcodeValue" placeholder="Custom barcode text (optional)" /></label>
+          <label>Home Address<input id="homeAddress" placeholder="Enter home address" /></label>
+          <label>Emergency Contact Person<input id="emergencyPerson" placeholder="Enter emergency contact person" /></label>
+          <label>Emergency Contact No<input id="emergencyNo" placeholder="Enter emergency contact number" /></label>
+          <label>Return Contact<input id="returnContact" placeholder="Enter return contact" /></label>
+          <label>Return Contact No<input id="returnContactNo" placeholder="Enter return contact number" /></label>
+        </div>
       </div>
     </section>
 
@@ -433,7 +481,7 @@ If found, please call our main office</textarea>
     <img id="cardZoomImage" class="card-zoom-image" alt="Zoomed ID preview" />
   </div>
 
-  <section class="credits-box app-credit" aria-label="Footer Credit">
+  <section class="credits-box app-credit" aria-label="Footer Credit" style="visibility: hidden;">
     <img
       id="creatorCreditPhoto"
       class="creator-credit-photo"
@@ -443,6 +491,68 @@ If found, please call our main office</textarea>
     <p id="creatorCreditText" class="footer-credit-text">Powered by Rafael Betinol — Professional &amp; Secure ID Creation</p>
     <button id="creatorTrademarkBtn" type="button" class="credit-photo-set" aria-label="Edit trademark settings" hidden>TM</button>
   </section>
+  <script>
+    (function () {
+      const photoEl = document.getElementById("creatorCreditPhoto");
+      const textEl = document.getElementById("creatorCreditText");
+      let revealed = false;
+      const applyFromStorage = () => {
+        try {
+          const cloudStore = window.idCardCloudStore;
+          const cloudPhoto = cloudStore ? cloudStore.getItem("idCardCreatorCreatorCreditPhotoV1") : null;
+          const cloudText = cloudStore ? cloudStore.getItem("idCardCreatorCreatorCreditTextV1") : null;
+          const localPhoto = window.localStorage.getItem("idCardCreatorCreatorCreditPhotoV1");
+          const localText = window.localStorage.getItem("idCardCreatorCreatorCreditTextV1");
+          const photo = cloudPhoto || localPhoto;
+          const text = cloudText || localText;
+          if (photoEl) {
+            photoEl.style.visibility = "hidden";
+          }
+          if (photo && photoEl) {
+            photoEl.onload = () => {
+              if (photoEl) photoEl.style.visibility = "visible";
+              reveal();
+            };
+            photoEl.onerror = () => {
+              if (photoEl) photoEl.style.visibility = "visible";
+              reveal();
+            };
+            photoEl.src = "";
+            photoEl.src = photo;
+          }
+          if (text && text.trim() && textEl) textEl.textContent = text;
+          if (cloudPhoto) window.localStorage.setItem("idCardCreatorCreatorCreditPhotoV1", String(cloudPhoto));
+          if (cloudText !== null && cloudText !== undefined) {
+            window.localStorage.setItem("idCardCreatorCreatorCreditTextV1", String(cloudText));
+          }
+        } catch {
+          // ignore storage errors
+        }
+      };
+      const reveal = () => {
+        if (revealed) return;
+        revealed = true;
+        document.documentElement.classList.add("credit-ready");
+        document.documentElement.classList.remove("credit-has-local");
+        document.documentElement.classList.remove("credit-loading");
+        const credit = document.querySelector(".app-credit");
+        if (credit) credit.style.visibility = "visible";
+        if (photoEl) photoEl.style.visibility = "visible";
+      };
+      const ready = window.__idCardCloudReady || Promise.resolve();
+      ready.then(() => {
+        applyFromStorage();
+        reveal();
+      });
+      window.addEventListener("id-card-store", (evt) => {
+        const key = evt && evt.detail ? evt.detail.key : "";
+        if (key === "idCardCreatorCreatorCreditPhotoV1" || key === "idCardCreatorCreatorCreditTextV1") {
+          applyFromStorage();
+          reveal();
+        }
+      });
+    })();
+  </script>
 
   <div id="entryLoginModal" class="admin-login-modal" hidden>
     <div class="admin-login-card" role="dialog" aria-modal="true" aria-labelledby="entryLoginTitle">

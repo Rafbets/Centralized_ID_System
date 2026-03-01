@@ -4,6 +4,18 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Approved ID Previews</title>
+  <script>
+    (function () {
+      document.documentElement.classList.add("credit-loading");
+      try {
+        const hasPhoto = !!window.localStorage.getItem("idCardCreatorCreatorCreditPhotoV1");
+        const hasText = !!window.localStorage.getItem("idCardCreatorCreatorCreditTextV1");
+        if (hasPhoto || hasText) document.documentElement.classList.add("credit-has-local");
+      } catch {
+        // ignore storage errors
+      }
+    })();
+  </script>
   <style>
     :root {
       --bg: #e9eef9;
@@ -499,11 +511,23 @@
 
     .credits-box {
       padding: 8px 12px;
-      border: 1px solid #c6d6f4;
+      border: 0;
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.92);
-      box-shadow: 0 8px 20px rgba(17, 28, 56, 0.2);
-      backdrop-filter: blur(4px);
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .footer-credit-text {
+      margin: 0;
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: var(--fb-text, #1c1e21);
+      text-align: center;
+      font-family: "Roboto Condensed", "Segoe UI", Arial, sans-serif;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 70vw;
     }
 
     .app-credit {
@@ -514,8 +538,21 @@
       left: 50%;
       bottom: 10px;
       transform: translateX(-50%);
-      z-index: 60;
+      z-index: 50;
       max-width: calc(100vw - 24px);
+    }
+
+    .credit-loading .app-credit,
+    .credit-has-local .app-credit {
+      visibility: hidden;
+    }
+
+    .credit-ready .app-credit {
+      visibility: visible;
+    }
+
+    .app-credit img {
+      visibility: inherit;
     }
 
     .creator-credit-photo {
@@ -524,18 +561,6 @@
       border-radius: 50%;
       object-fit: cover;
       border: 1px solid rgba(24, 119, 242, 0.45);
-    }
-
-    .footer-credit-text {
-      margin: 0;
-      font-size: 0.74rem;
-      font-weight: 700;
-      color: #243a67;
-      text-align: center;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 70vw;
     }
 
     @keyframes dialogIn {
@@ -752,9 +777,9 @@
     }
 
     body.theme-dark .credits-box {
-      border-color: #4a5977;
-      background: rgba(36, 45, 64, 0.92);
-      box-shadow: 0 10px 22px rgba(0, 0, 0, 0.4);
+      border-color: transparent;
+      background: transparent;
+      box-shadow: none;
     }
 
     body.theme-dark .footer-credit-text {
@@ -990,7 +1015,7 @@
     </div>
   </div>
 
-  <section class="credits-box app-credit" aria-label="Footer Credit">
+  <section class="credits-box app-credit" aria-label="Footer Credit" style="visibility: hidden;">
     <img
       id="creatorCreditPhoto"
       class="creator-credit-photo"
@@ -999,6 +1024,68 @@
     />
     <p id="creatorCreditText" class="footer-credit-text">Powered by Rafael Betinol — Professional &amp; Secure ID Creation</p>
   </section>
+  <script>
+    (function () {
+      const photoEl = document.getElementById("creatorCreditPhoto");
+      const textEl = document.getElementById("creatorCreditText");
+      let revealed = false;
+      const applyFromStorage = () => {
+        try {
+          const cloudStore = window.idCardCloudStore;
+          const cloudPhoto = cloudStore ? cloudStore.getItem("idCardCreatorCreatorCreditPhotoV1") : null;
+          const cloudText = cloudStore ? cloudStore.getItem("idCardCreatorCreatorCreditTextV1") : null;
+          const localPhoto = window.localStorage.getItem("idCardCreatorCreatorCreditPhotoV1");
+          const localText = window.localStorage.getItem("idCardCreatorCreatorCreditTextV1");
+          const photo = cloudPhoto || localPhoto;
+          const text = cloudText || localText;
+          if (photoEl) {
+            photoEl.style.visibility = "hidden";
+          }
+          if (photo && photoEl) {
+            photoEl.onload = () => {
+              if (photoEl) photoEl.style.visibility = "visible";
+              reveal();
+            };
+            photoEl.onerror = () => {
+              if (photoEl) photoEl.style.visibility = "visible";
+              reveal();
+            };
+            photoEl.src = "";
+            photoEl.src = photo;
+          }
+          if (text && text.trim() && textEl) textEl.textContent = text;
+          if (cloudPhoto) window.localStorage.setItem("idCardCreatorCreatorCreditPhotoV1", String(cloudPhoto));
+          if (cloudText !== null && cloudText !== undefined) {
+            window.localStorage.setItem("idCardCreatorCreatorCreditTextV1", String(cloudText));
+          }
+        } catch {
+          // ignore storage errors
+        }
+      };
+      const reveal = () => {
+        if (revealed) return;
+        revealed = true;
+        document.documentElement.classList.add("credit-ready");
+        document.documentElement.classList.remove("credit-has-local");
+        document.documentElement.classList.remove("credit-loading");
+        const credit = document.querySelector(".app-credit");
+        if (credit) credit.style.visibility = "visible";
+        if (photoEl) photoEl.style.visibility = "visible";
+      };
+      const ready = window.__idCardCloudReady || Promise.resolve();
+      ready.then(() => {
+        applyFromStorage();
+        reveal();
+      });
+      window.addEventListener("id-card-store", (evt) => {
+        const key = evt && evt.detail ? evt.detail.key : "";
+        if (key === "idCardCreatorCreatorCreditPhotoV1" || key === "idCardCreatorCreatorCreditTextV1") {
+          applyFromStorage();
+          reveal();
+        }
+      });
+    })();
+  </script>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="cloud-sync.js"></script>
@@ -1016,7 +1103,14 @@
     const supabaseProjectUrl = "https://pboqhiwhkqfitxvbzbxt.supabase.co";
     const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBib3FoaXdoa3FmaXR4dmJ6Ynh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwMDI4MzgsImV4cCI6MjA4NzU3ODgzOH0.H9DjOQmSop9e6O_z0uZgBNT2-WtuE4DJc4o1gFMs1do";
     const supabaseClient = window.supabase && supabaseProjectUrl && supabaseAnonKey
-      ? window.supabase.createClient(supabaseProjectUrl, supabaseAnonKey)
+      ? window.supabase.createClient(supabaseProjectUrl, supabaseAnonKey, {
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+            storage: window.localStorage
+          }
+        })
       : null;
     const authChannel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("idcard-auth") : null;
     const cloudStore = window.idCardCloudStore;
@@ -1061,6 +1155,20 @@
     const previewLightboxClose = document.getElementById("previewLightboxClose");
     const creatorCreditPhoto = document.getElementById("creatorCreditPhoto");
     const creatorCreditText = document.getElementById("creatorCreditText");
+    function readCreatorCreditValue(key) {
+      const cloudValue = getStoreItem(key);
+      if (cloudValue !== null && cloudValue !== undefined && cloudValue !== "") {
+        try {
+          window.localStorage.setItem(key, String(cloudValue));
+        } catch {}
+        return cloudValue;
+      }
+      try {
+        const local = window.localStorage.getItem(key);
+        if (local !== null && local !== undefined && local !== "") return local;
+      } catch {}
+      return null;
+    }
     let approveLoadingOverlay = null;
     const refreshLoadingOverlay = document.getElementById("refreshLoadingOverlay");
     let approveLoadingPercent = null;
@@ -2109,13 +2217,13 @@
 
     function loadFooterCredit() {
       try {
-        const savedPhoto = getStoreItem(creatorCreditPhotoStorageKey);
+        const savedPhoto = readCreatorCreditValue(creatorCreditPhotoStorageKey);
         if (savedPhoto && creatorCreditPhoto) creatorCreditPhoto.src = savedPhoto;
       } catch {
         // ignore storage errors
       }
       try {
-        const savedText = getStoreItem(creatorCreditTextStorageKey);
+        const savedText = readCreatorCreditValue(creatorCreditTextStorageKey);
         if (savedText && savedText.trim() && creatorCreditText) {
           creatorCreditText.textContent = savedText;
         }
