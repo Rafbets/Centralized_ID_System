@@ -784,7 +784,7 @@ function loadImageFromSource(src) {
 function getImageAverageLuma(img) {
   const sampleSize = 56;
   const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   canvas.width = sampleSize;
   canvas.height = sampleSize;
   ctx.drawImage(img, 0, 0, sampleSize, sampleSize);
@@ -1198,7 +1198,7 @@ function drawQrCenterLogo() {
 
 function getCanvasInkBounds(canvas) {
   if (!canvas) return null;
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) return null;
   const w = canvas.width || 0;
   const h = canvas.height || 0;
@@ -1584,7 +1584,7 @@ async function tintSignatureDataUrl(dataUrl, color) {
   const canvas = document.createElement("canvas");
   canvas.width = img.naturalWidth || img.width || 1;
   canvas.height = img.naturalHeight || img.height || 1;
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   ctx.drawImage(img, 0, 0);
 
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -1755,7 +1755,7 @@ function removeSignatureBackgroundDataUrl(file) {
     const canvas = document.createElement("canvas");
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     ctx.drawImage(img, 0, 0);
 
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -1811,7 +1811,7 @@ function removeSignatureBackgroundDataUrl(file) {
 
     // Trim transparent edges.
     const trimmed = document.createElement("canvas");
-    const tctx = trimmed.getContext("2d");
+    const tctx = trimmed.getContext("2d", { willReadFrequently: true });
     const finalData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
     let minX = canvas.width;
     let minY = canvas.height;
@@ -1909,9 +1909,7 @@ function initSignaturePad() {
     }
     employeeSignatureBaseDataUrl = signaturePad.toDataURL("image/png");
     renderEmployeeSignatureFromBase();
-    signatureX.value = "0";
-    signatureY.value = "0";
-    signatureScale.value = "100";
+    applySignatureAdjustDefaults();
     renderAdjustments();
     setStatus("Electronic signature applied.");
   }
@@ -2120,11 +2118,8 @@ async function cancelSignaturePhoneRequest() {
       if (data.signature_data) {
         employeeSignatureBaseDataUrl = data.signature_data;
         renderEmployeeSignatureFromBase();
-      if (signatureX) signatureX.value = "0";
-      if (signatureY) signatureY.value = "0";
-      if (signatureScale) signatureScale.value = "100";
-      if (signatureRotate) signatureRotate.value = "0";
-      renderAdjustments();
+        applySignatureAdjustDefaults();
+        renderAdjustments();
         setStatus("Signature received from phone.");
         stopSignaturePhonePolling();
         try {
@@ -2317,10 +2312,7 @@ signatureFileInput.addEventListener("change", () => {
     .then((dataUrl) => {
       employeeSignatureBaseDataUrl = dataUrl;
       renderEmployeeSignatureFromBase();
-      signatureX.value = "0";
-      signatureY.value = "0";
-      signatureScale.value = "100";
-      if (signatureRotate) signatureRotate.value = "0";
+      applySignatureAdjustDefaults();
       renderAdjustments();
       setStatus("Signature background removed.");
     })
@@ -2333,10 +2325,7 @@ signatureFileInput.addEventListener("change", () => {
       );
       employeeSignatureBaseDataUrl = employeeSignature.src || fallbackSignature;
       renderEmployeeSignatureFromBase();
-      signatureX.value = "0";
-      signatureY.value = "0";
-      signatureScale.value = "100";
-      if (signatureRotate) signatureRotate.value = "0";
+      applySignatureAdjustDefaults();
       renderAdjustments();
       setStatus(`Signature cleanup failed: ${err.message}`, true);
     });
@@ -2431,6 +2420,20 @@ const authSignatureX = document.getElementById("authSignatureX");
 const authSignatureY = document.getElementById("authSignatureY");
 const authSignatureScale = document.getElementById("authSignatureScale");
 const authSignatureRotate = document.getElementById("authSignatureRotate");
+
+function applySignatureAdjustDefaults() {
+  const apply = (el, id, fallback) => {
+    if (!el) return;
+    const useDefault = defaultFieldState.selected.has(id) && typeof defaultFieldState.values[id] === "string";
+    el.value = useDefault ? defaultFieldState.values[id] : fallback;
+  };
+  apply(signatureX, "signatureX", "0");
+  apply(signatureY, "signatureY", "0");
+  apply(signatureScale, "signatureScale", "100");
+  if (signatureRotate) {
+    apply(signatureRotate, "signatureRotate", "0");
+  }
+}
 
 function renderProfileFrameShape() {
   if (!photoRing) return;
