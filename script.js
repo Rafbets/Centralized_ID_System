@@ -1044,6 +1044,32 @@ function runOnNextFrame() {
   });
 }
 
+function resolvePublicUrl(relativePath) {
+  const path = String(relativePath || "").trim();
+  if (!path) return "";
+  try {
+    const preferredBase = getStoreItem(qrPublicBaseUrlStorageKey);
+    if (preferredBase && preferredBase.trim()) {
+      return new URL(path, preferredBase.trim()).href;
+    }
+  } catch {}
+  try {
+    return new URL(path, window.location.href).href;
+  } catch {}
+  return path;
+}
+
+function generateToken(length = 10) {
+  const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+  const bytes = new Uint8Array(length);
+  if (window.crypto && window.crypto.getRandomValues) {
+    window.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
+}
+
 async function waitForUiPaint(frames = 2) {
   for (let i = 0; i < frames; i += 1) {
     await runOnNextFrame();
@@ -1450,6 +1476,14 @@ const signaturePadWrap = document.getElementById("signaturePadWrap");
 const signaturePad = document.getElementById("signaturePad");
 const clearSignaturePadBtn = document.getElementById("clearSignaturePad");
 const usePadSignatureBtn = document.getElementById("usePadSignature");
+const signaturePadSourceRow = document.getElementById("signaturePadSourceRow");
+const signaturePadSource = document.getElementById("signaturePadSource");
+const signaturePhonePanel = document.getElementById("signaturePhonePanel");
+const signaturePhoneQr = document.getElementById("signaturePhoneQr");
+const signaturePhoneLink = document.getElementById("signaturePhoneLink");
+const signaturePhoneStatus = document.getElementById("signaturePhoneStatus");
+const signaturePhoneCopy = document.getElementById("signaturePhoneCopy");
+const signaturePhoneCancel = document.getElementById("signaturePhoneCancel");
 const logoX = document.getElementById("logoX");
 const logoY = document.getElementById("logoY");
 const logoScale = document.getElementById("logoScale");
@@ -1896,8 +1930,8 @@ function initSignaturePad() {
   }
 }
 
-function initAuthSignaturePad() {
-  if (!authSignaturePad) return;
+  function initAuthSignaturePad() {
+    if (!authSignaturePad) return;
   const ctx = authSignaturePad.getContext("2d");
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
@@ -1986,10 +2020,36 @@ function setSignatureMode(mode) {
   const normalized = mode === "draw" ? "draw" : "upload";
   if (signatureModeInput) signatureModeInput.value = normalized;
   if (signatureUploadRow) signatureUploadRow.hidden = normalized !== "upload";
-  if (signaturePadWrap) signaturePadWrap.hidden = normalized !== "draw";
+  if (signaturePadSourceRow) signaturePadSourceRow.hidden = normalized !== "draw";
   if (signatureFileInput) signatureFileInput.disabled = normalized !== "upload";
   if (normalized === "draw") {
     setStatus("Draw your signature, then click Use Drawn Signature.");
+    updateSignaturePadSource("phone");
+  } else {
+    clearSignaturePhoneRequest();
+    if (signaturePadWrap) signaturePadWrap.hidden = true;
+  }
+}
+
+function updateSignaturePadSource(source) {
+  const mode = signatureModeInput ? signatureModeInput.value : "upload";
+  let resolved = source === "phone" ? "phone" : "desktop";
+  if (resolved === "phone" && !supabaseClient) {
+    resolved = "desktop";
+    setStatus("Phone pad unavailable. Using desktop pad instead.", true);
+  }
+  if (signaturePadSource) signaturePadSource.value = resolved;
+  if (mode !== "draw") {
+    if (signaturePadWrap) signaturePadWrap.hidden = true;
+    clearSignaturePhoneRequest();
+    return;
+  }
+  if (resolved === "phone") {
+    if (signaturePadWrap) signaturePadWrap.hidden = true;
+    startSignaturePhoneRequest();
+  } else {
+    clearSignaturePhoneRequest();
+    if (signaturePadWrap) signaturePadWrap.hidden = false;
   }
 }
 
@@ -1999,6 +2059,131 @@ function setAuthSignatureMode(mode) {
   if (authSignatureUploadRow) authSignatureUploadRow.hidden = normalized !== "upload";
   if (authSignaturePadWrap) authSignaturePadWrap.hidden = normalized !== "draw";
   if (authSignatureFileInput) authSignatureFileInput.disabled = normalized !== "upload";
+}
+
+let signaturePhoneRequest = null;
+let signaturePhonePollTimer = null;
+let signaturePhoneQrEngine = null;
+
+function setSignaturePhoneStatus(text, isError = false) {
+  if (!signaturePhoneStatus) return;
+  signaturePhoneStatus.textContent = text;
+  signaturePhoneStatus.style.color = isError ? "#ff8fa0" : "";
+}
+
+function stopSignaturePhonePolling() {
+  if (signaturePhonePollTimer) clearInterval(signaturePhonePollTimer);
+  signaturePhonePollTimer = null;
+}
+
+function clearSignaturePhoneRequest() {
+  stopSignaturePhonePolling();
+  signaturePhoneRequest = null;
+  if (signaturePhoneLink) {
+    signaturePhoneLink.textContent = "";
+    signaturePhoneLink.removeAttribute("href");
+  }
+  if (signaturePhonePanel) signaturePhonePanel.hidden = true;
+  // no toggle button now
+}
+
+async function cancelSignaturePhoneRequest() {
+  if (signaturePhoneRequest && supabaseClient) {
+    try {
+      await supabaseClient
+        .from("signature_requests")
+        .delete()
+        .eq("token", signaturePhoneRequest.token);
+    } catch {
+      // ignore cancel errors
+    }
+  }
+  setSignaturePhoneStatus("Request cancelled.");
+  clearSignaturePhoneRequest();
+}
+
+async function pollSignaturePhoneRequest() {
+  if (!signaturePhoneRequest || !supabaseClient) return;
+  const { token } = signaturePhoneRequest;
+  try {
+    const { data, error } = await supabaseClient
+      .from("signature_requests")
+      .select("signature_data, used_at, expires_at")
+      .eq("token", token)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) {
+      setSignaturePhoneStatus("Signature request not found.", true);
+      stopSignaturePhonePolling();
+      return;
+    }
+    if (data.expires_at && Date.parse(data.expires_at) < Date.now()) {
+      setSignaturePhoneStatus("Signature request expired.", true);
+      stopSignaturePhonePolling();
+      return;
+    }
+    if (data.signature_data) {
+      employeeSignatureBaseDataUrl = data.signature_data;
+      renderEmployeeSignatureFromBase();
+      if (signatureX) signatureX.value = "0";
+      if (signatureY) signatureY.value = "0";
+      if (signatureScale) signatureScale.value = "100";
+      if (signatureRotate) signatureRotate.value = "0";
+      renderAdjustments();
+      setStatus("Signature received from phone.");
+      stopSignaturePhonePolling();
+      try {
+        await supabaseClient.from("signature_requests").delete().eq("token", token);
+      } catch {
+        // ignore cleanup errors
+      }
+      clearSignaturePhoneRequest();
+    }
+  } catch (err) {
+    setSignaturePhoneStatus(`Polling failed: ${err.message || err}`, true);
+  }
+}
+
+async function startSignaturePhoneRequest() {
+  if (!signaturePhonePanel) return;
+  if (!supabaseClient) {
+    setSignaturePhoneStatus("Supabase unavailable.", true);
+    return;
+  }
+  signaturePhonePanel.hidden = false;
+  setSignaturePhoneStatus("Creating secure link...");
+  const token = generateToken(12);
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  try {
+    const { error } = await supabaseClient
+      .from("signature_requests")
+      .insert({ token, expires_at: expiresAt });
+    if (error) throw error;
+    const url = resolvePublicUrl(`signature-pad.html?t=${encodeURIComponent(token)}`);
+    signaturePhoneRequest = { token, url, expiresAt };
+    if (signaturePhoneLink) {
+      signaturePhoneLink.textContent = url;
+      signaturePhoneLink.href = url;
+    }
+    if (signaturePhoneQr && typeof window.QRious === "function") {
+      if (!signaturePhoneQrEngine) {
+        signaturePhoneQrEngine = new window.QRious({
+          element: signaturePhoneQr,
+          value: url,
+          size: 160,
+          level: "H"
+        });
+      } else {
+        signaturePhoneQrEngine.value = url;
+      }
+    }
+    setSignaturePhoneStatus("Waiting for signature...");
+    stopSignaturePhonePolling();
+    signaturePhonePollTimer = setInterval(pollSignaturePhoneRequest, 2000);
+    await pollSignaturePhoneRequest();
+  } catch (err) {
+    setSignaturePhoneStatus(`Failed to create link: ${err.message || err}`, true);
+  }
 }
 
 function toggleSignatureAdjustPanel() {
@@ -2422,6 +2607,26 @@ if (signatureAdjustToggle) {
 if (profileAdjustToggle) {
   profileAdjustToggle.addEventListener("click", toggleProfileAdjustPanel);
 }
+if (signaturePadSource) {
+  signaturePadSource.addEventListener("change", () => {
+    updateSignaturePadSource(signaturePadSource.value);
+  });
+}
+if (signaturePhoneCopy) {
+  signaturePhoneCopy.addEventListener("click", async () => {
+    const link = signaturePhoneRequest && signaturePhoneRequest.url ? signaturePhoneRequest.url : "";
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setSignaturePhoneStatus("Link copied.");
+    } catch {
+      setSignaturePhoneStatus("Copy failed. Select the link manually.", true);
+    }
+  });
+}
+if (signaturePhoneCancel) {
+  signaturePhoneCancel.addEventListener("click", cancelSignaturePhoneRequest);
+}
 if (profileFrameAdjustToggle) {
   profileFrameAdjustToggle.addEventListener("click", toggleProfileFrameAdjustPanel);
 }
@@ -2604,6 +2809,7 @@ const adminAllowedWhileLocked = new Set([
   "profileFrameShape",
   "profileFrameSize",
   "signatureMode",
+  "signaturePadSource",
   "signatureColor",
   "signatureFile",
   "signatureAdjustToggle",
@@ -2611,6 +2817,8 @@ const adminAllowedWhileLocked = new Set([
   "signatureY",
   "signatureScale",
   "signatureRotate",
+  "signaturePhoneCopy",
+  "signaturePhoneCancel",
   "authSignatureMode",
   "authSignatureColor",
   "authSignatureFile",

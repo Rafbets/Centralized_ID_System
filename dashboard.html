@@ -387,6 +387,12 @@ If found, please call our main office</textarea>
               <option value="draw">Electronic Pad</option>
             </select>
           </label>
+          <label id="signaturePadSourceRow">Pad Source
+            <select id="signaturePadSource">
+              <option value="desktop">Desktop Pad</option>
+              <option value="phone">Phone Pad</option>
+            </select>
+          </label>
           <div id="signatureUploadRow" class="photo-upload">
             <label for="signatureFile" class="upload-btn">Choose Signature</label>
             <input id="signatureFile" type="file" accept="image/*" />
@@ -403,6 +409,19 @@ If found, please call our main office</textarea>
             <div class="signature-pad-actions">
               <button id="clearSignaturePad" type="button">Clear Pad</button>
               <button id="usePadSignature" type="button">Use Drawn Signature</button>
+            </div>
+          </div>
+          <div id="signaturePhonePanel" class="signature-phone-panel" hidden>
+            <div class="signature-phone-head">Scan to Sign</div>
+            <canvas id="signaturePhoneQr" width="160" height="160" aria-label="Signature QR code"></canvas>
+            <div class="signature-phone-link">
+              <span>Link</span>
+              <a id="signaturePhoneLink" href="#" target="_blank" rel="noopener noreferrer"></a>
+            </div>
+            <p id="signaturePhoneStatus" class="signature-phone-status">Waiting for signature...</p>
+            <div class="signature-phone-actions">
+              <button id="signaturePhoneCopy" type="button">Copy Link</button>
+              <button id="signaturePhoneCancel" type="button" class="secondary">Cancel</button>
             </div>
           </div>
         </div>
