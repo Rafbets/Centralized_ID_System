@@ -3184,6 +3184,7 @@ function applyAdminAccessState() {
     "profileX",
     "profileY",
     "profileScale",
+    "profileRotate",
     "profileFrameX",
     "profileFrameY",
     "profileFrameShape",
